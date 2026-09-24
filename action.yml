@@ -50,8 +50,16 @@ inputs:
     description: When true, posts a summary comment on the Issue/PR.
     required: false
     default: 'false'
+  apply_labels:
+    description: When true, apply managed jev:decision:* / jev:model:* labels (preserves other labels).
+    required: false
+    default: 'false'
+  create_check_run:
+    description: When true (default), create a GitHub Check Run for the head SHA (PRs/pushes).
+    required: false
+    default: 'true'
   dry_run:
-    description: When true, skips mutating GitHub writes (comments).
+    description: When true, skips mutating GitHub writes (comments, labels, check runs).
     required: false
     default: 'false'
   include_pr_diff:
@@ -84,6 +92,10 @@ outputs:
     description: Number of PR files summarized when include_pr_diff collected signals.
   diff_languages:
     description: JSON array of languages inferred from PR file paths.
+  label_status:
+    description: applied | dry-run | skipped
+  check_status:
+    description: created | dry-run | skipped
 
 runs:
   using: node24

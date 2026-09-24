@@ -89,6 +89,8 @@ async function main(): Promise<void> {
     'comment_on_github',
     config.comment_on_github ?? false,
   );
+  const apply_labels = readBoolean('apply_labels', false);
+  const create_check_run = readBoolean('create_check_run', true);
   const dry_run = readBoolean('dry_run', false);
   const include_pr_diff = readBoolean('include_pr_diff', true);
   const timeout_ms = Number(core.getInput('timeout_ms') || 45_000);
@@ -153,6 +155,77 @@ async function main(): Promise<void> {
         }
       : null;
 
+  const labelClient =
+    octokit && issueNumber
+      ? {
+          async listLabels() {
+            const issue = await octokit.rest.issues.get({
+              owner: github.context.repo.owner,
+              repo: github.context.repo.repo,
+              issue_number: Number(issueNumber),
+            });
+            return (issue.data.labels ?? [])
+              .map(label => (typeof label === 'string' ? label : label.name))
+              .filter((name): name is string => typeof name === 'string');
+          },
+          async ensureLabel(name: string) {
+            try {
+              await octokit.rest.issues.createLabel({
+                owner: github.context.repo.owner,
+                repo: github.context.repo.repo,
+                name,
+                color: '0E8A16',
+                description: 'Managed by JEV Model Navigator',
+              });
+            } catch (error) {
+              const status =
+                error && typeof error === 'object' && 'status' in error
+                  ? Number((error as { status?: number }).status)
+                  : undefined;
+              if (status !== 422) throw error;
+            }
+          },
+          async setLabels(next: string[]) {
+            await octokit.rest.issues.setLabels({
+              owner: github.context.repo.owner,
+              repo: github.context.repo.repo,
+              issue_number: Number(issueNumber),
+              labels: next,
+            });
+          },
+        }
+      : null;
+
+  const headSha =
+    github.context.payload.pull_request?.head?.sha ??
+    github.context.sha ??
+    null;
+
+  const checkRunClient = octokit
+    ? {
+        async createCheckRun(input: {
+          name: string;
+          headSha: string;
+          conclusion: 'success' | 'neutral' | 'failure';
+          title: string;
+          summary: string;
+        }) {
+          await octokit.rest.checks.create({
+            owner: github.context.repo.owner,
+            repo: github.context.repo.repo,
+            name: input.name,
+            head_sha: input.headSha,
+            status: 'completed',
+            conclusion: input.conclusion,
+            output: {
+              title: input.title,
+              summary: input.summary,
+            },
+          });
+        },
+      }
+    : null;
+
   const signals = {
     ...collected.signals,
     source:
@@ -180,9 +253,14 @@ async function main(): Promise<void> {
     jev_model: jev_model || undefined,
     timeout_ms,
     comment_on_github,
+    apply_labels,
+    create_check_run,
     dry_run,
+    head_sha: headSha,
     apiKey: resolveApiKey(jev_provider),
     commentClient,
+    labelClient,
+    checkRunClient,
   });
 
   applyPolicyToAction(
@@ -196,7 +274,11 @@ async function main(): Promise<void> {
     result.summary,
   );
 
+  core.setOutput('label_status', result.labelStatus);
+  core.setOutput('check_status', result.checkStatus);
   core.info(`Comment: ${result.commentStatus}`);
+  core.info(`Labels: ${result.labelStatus}`);
+  core.info(`Check run: ${result.checkStatus}`);
   if (result.invokeDetail) core.info(result.invokeDetail);
 }
 
