@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1
+
+- Shorten `action.yml` description to under 125 characters for GitHub Marketplace.
+
 ## 0.1.0
 
 - Initial GitHub Action for Issue/PR model selection via Jev.

@@ -1,8 +1,5 @@
 name: JEV Model Navigator
-description: >
-  Uses TypeSafe Jev to select which AI model should handle an Issue or Pull Request task.
-  Returns selected_model, provider, confidence, and reason_codes. Default decision_only mode
-  recommends without invoking the selected model.
+description: Select the best AI model for an Issue or PR task using TypeSafe Jev.
 author: JevForge
 branding:
   icon: compass
