@@ -1,9 +1,10 @@
 # Changelog
 
-## [Unreleased]
+## 0.4.1
 
 ### Changed
 
+* Automated Release workflow: push `vX.Y.Z` or run **Release** via `workflow_dispatch` to create the GitHub Release and move the floating major tag (`v0`).
 * Professional open-source documentation (README, CONTRIBUTING, SECURITY).
 * Clarified `action.yml` descriptions for Marketplace consumers.
 * Added example workflows (`examples/basic.yml`, `pr.yml`, `gate.yml`).
