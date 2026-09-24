@@ -27,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - id: nav
-        uses: JevForge/jev-model-navigator@v0 # pin a release tag/SHA when published
+        uses: JevForge/jev-model-navigator@v0.1.0
         env:
           AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
         with:
@@ -38,7 +38,7 @@ jobs:
       - run: echo "${{ steps.nav.outputs.selected_model }} (${{ steps.nav.outputs.confidence }})"
 ```
 
-Copy `examples/model-catalog.yml` to `.jev/model-catalog.yml` in the consumer repo (or pass `candidates` JSON).
+Pin `@v0.1.0` for reproducibility, or `@v0` for the floating major.
 
 ## How it works
 
