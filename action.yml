@@ -76,6 +76,10 @@ outputs:
     description: Selected candidate model id, or empty when abstaining/review.
   provider:
     description: Provider of the selected model (not the Jev access provider).
+  alternate_model:
+    description: Fallback candidate model id (different from selected_model), or empty.
+  ranked_models:
+    description: JSON array of ranked candidate ids (selected first, then alternate).
   confidence:
     description: Confidence score between 0 and 1.
   reason_codes:

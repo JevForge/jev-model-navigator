@@ -36,8 +36,25 @@ const stateBase = {
 
 describe('typesafe-native provider', () => {
   it('normalizes a compatible evaluate response', async () => {
-    const fetchImpl = vi.fn(async () =>
-      new Response(
+    const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? '{}')) as {
+        questions?: Record<string, unknown>;
+      };
+      if (body.questions && 'alternate_model' in body.questions) {
+        return new Response(
+          JSON.stringify({
+            answers: {
+              alternate_model: {
+                type: 'choice',
+                choice: 'google-gemini-3-5-flash',
+                confidence: 0.8,
+              },
+            },
+          }),
+          { status: 200 },
+        );
+      }
+      return new Response(
         JSON.stringify({
           answers: {
             selected_model: { type: 'choice', choice: 'openai-gpt-5-5', confidence: 0.91 },
@@ -46,8 +63,8 @@ describe('typesafe-native provider', () => {
           },
         }),
         { status: 200 },
-      ),
-    );
+      );
+    });
 
     const provider = createTypesafeNativeProvider({
       apiKey: 'test-key',
@@ -59,6 +76,11 @@ describe('typesafe-native provider', () => {
     const decision = await provider.evaluateModelSelection(stateBase);
     expect(decision.decision).toBe('SELECT_MODEL');
     expect(decision.selected_model).toBe('openai-gpt-5-5');
+    expect(decision.alternate_model).toBe('google-gemini-3-5-flash');
+    expect(decision.ranked_models).toEqual([
+      'openai-gpt-5-5',
+      'google-gemini-3-5-flash',
+    ]);
     expect(decision.provisional).toBe(false);
   });
 
@@ -95,8 +117,25 @@ describe('factory', () => {
 
 describe('runNavigator integration', () => {
   it('writes SELECT_MODEL through mocked native provider', async () => {
-    const fetchImpl = vi.fn(async () =>
-      new Response(
+    const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? '{}')) as {
+        questions?: Record<string, unknown>;
+      };
+      if (body.questions && 'alternate_model' in body.questions) {
+        return new Response(
+          JSON.stringify({
+            answers: {
+              alternate_model: {
+                type: 'choice',
+                choice: 'openai-gpt-5-5',
+                confidence: 0.77,
+              },
+            },
+          }),
+          { status: 200 },
+        );
+      }
+      return new Response(
         JSON.stringify({
           answers: {
             selected_model: {
@@ -109,8 +148,8 @@ describe('runNavigator integration', () => {
           },
         }),
         { status: 200 },
-      ),
-    );
+      );
+    });
 
     const result = await runNavigator({
       task: 'Implement caching layer',
@@ -134,6 +173,11 @@ describe('runNavigator integration', () => {
 
     expect(result.outcome.status).toBe('ok');
     expect(result.decision.selected_model).toBe('google-gemini-3-5-flash');
+    expect(result.decision.alternate_model).toBe('openai-gpt-5-5');
+    expect(result.decision.ranked_models).toEqual([
+      'google-gemini-3-5-flash',
+      'openai-gpt-5-5',
+    ]);
     expect(result.decision.provider).toBe('google');
   });
 });

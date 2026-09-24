@@ -76,6 +76,8 @@ export function buildCheckSummary(outcome: PolicyOutcome): string {
     `| --- | --- |`,
     `| Decision | \`${d.decision}\` |`,
     `| Selected model | \`${d.selected_model ?? 'none'}\` |`,
+    `| Alternate model | \`${d.alternate_model ?? 'none'}\` |`,
+    `| Ranked models | ${(d.ranked_models ?? []).map(m => `\`${m}\``).join(', ') || '`none`'} |`,
     `| Model provider | \`${d.provider ?? 'none'}\` |`,
     `| Confidence | ${d.confidence.toFixed(3)} |`,
     `| Policy | \`${outcome.status}\` |`,

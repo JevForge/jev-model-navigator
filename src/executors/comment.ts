@@ -6,6 +6,8 @@ export function buildCommentMarkdown(decision: NavigatorDecision): string {
     '',
     `- **Decision:** \`${decision.decision}\``,
     `- **Selected model:** \`${decision.selected_model ?? 'none'}\``,
+    `- **Alternate model:** \`${decision.alternate_model ?? 'none'}\``,
+    `- **Ranked models:** ${(decision.ranked_models ?? []).map(m => `\`${m}\``).join(', ') || '`none`'}`,
     `- **Model provider:** \`${decision.provider ?? 'none'}\``,
     `- **Confidence:** ${decision.confidence.toFixed(3)}`,
     `- **Reason codes:** ${decision.reason_codes.map(c => `\`${c}\``).join(', ')}`,

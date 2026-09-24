@@ -71,6 +71,8 @@ export function normalizeSelection(
     decision,
     selected_model,
     provider,
+    alternate_model: null,
+    ranked_models: selected_model ? [selected_model] : [],
     confidence: raw.confidence,
     reason_codes: pickReasonCodes(candidate, source, decision),
     explanation: raw.explanation ?? '',
@@ -80,11 +82,47 @@ export function normalizeSelection(
   return NavigatorDecisionSchema.parse(draft);
 }
 
+export function attachAlternate(
+  decision: NavigatorDecision,
+  alternateId: string | null,
+  candidates: ModelCandidate[],
+): NavigatorDecision {
+  if (decision.decision !== 'SELECT_MODEL' || !decision.selected_model) {
+    return NavigatorDecisionSchema.parse({
+      ...decision,
+      alternate_model: null,
+      ranked_models: decision.selected_model ? [decision.selected_model] : [],
+    });
+  }
+
+  const allow = new Set(candidates.map(c => c.id));
+  let alternate_model: string | null = alternateId;
+  if (
+    !alternate_model ||
+    !allow.has(alternate_model) ||
+    alternate_model === decision.selected_model
+  ) {
+    alternate_model = null;
+  }
+
+  const ranked_models = [decision.selected_model, alternate_model].filter(
+    (id): id is string => typeof id === 'string' && id.length > 0,
+  );
+
+  return NavigatorDecisionSchema.parse({
+    ...decision,
+    alternate_model,
+    ranked_models,
+  });
+}
+
 export function unavailableDecision(message: string): NavigatorDecision {
   return NavigatorDecisionSchema.parse({
     decision: 'ABSTAIN',
     selected_model: null,
     provider: null,
+    alternate_model: null,
+    ranked_models: [],
     confidence: 0,
     reason_codes: ['JEV_UNAVAILABLE'],
     explanation: message,

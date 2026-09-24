@@ -39,6 +39,33 @@ export function buildSelectionQuestions(candidates: ModelCandidate[]) {
   };
 }
 
+export function buildAlternateQuestions(candidates: ModelCandidate[], primaryId: string) {
+  const remaining = candidates.filter(c => c.id !== primaryId);
+  const criteria = Object.fromEntries(
+    remaining.map(c => [
+      c.id,
+      [
+        c.display_name ?? c.id,
+        `provider=${c.provider}`,
+        c.capabilities?.length ? `caps=${c.capabilities.join(',')}` : null,
+        c.cost_tier ? `cost=${c.cost_tier}` : null,
+      ]
+        .filter(Boolean)
+        .join('; '),
+    ]),
+  );
+  return {
+    remaining,
+    questions: {
+      alternate_model: {
+        type: 'choice' as const,
+        instructions: `Choose the best fallback model if ${primaryId} is unavailable. Choose a different listed candidate.`,
+        criteria,
+      },
+    },
+  };
+}
+
 export interface SummarizedJevState {
   task: string;
   signals: {
