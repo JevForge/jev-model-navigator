@@ -1,6 +1,6 @@
 {
   "name": "jev-model-navigator",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "GitHub Action that uses Jev to select which AI model should handle an Issue or Pull Request task.",
   "private": true,
   "type": "module",

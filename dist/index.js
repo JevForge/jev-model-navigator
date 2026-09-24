@@ -31982,18 +31982,37 @@ function sanitizeTaskText(text2, maxChars = 8e3) {
 }
 
 // src/collectors/github-event.ts
-function inferSignals(text2, kind) {
+function inferSignals(text2, kind, diff) {
   const lower = text2.toLowerCase();
-  const needs_code = /\b(code|implement|bug|fix|refactor|typescript|python|api|pr)\b/.test(lower) || kind === "pull_request";
-  const needs_reasoning = /\b(design|architect|trade-?off|why|plan|strategy|decide)\b/.test(lower);
-  const needs_analysis = /\b(analy[sz]e|investigate|root cause|perf|security|audit)\b/.test(lower);
+  let needs_code = /\b(code|implement|bug|fix|refactor|typescript|python|api|pr)\b/.test(lower) || kind === "pull_request";
+  let needs_reasoning = /\b(design|architect|trade-?off|why|plan|strategy|decide)\b/.test(lower);
+  let needs_analysis = /\b(analy[sz]e|investigate|root cause|perf|security|audit)\b/.test(lower);
+  if (diff) {
+    if (diff.file_count > 0 && !diff.touch_docs_only) needs_code = true;
+    if (diff.sensitive_paths.length > 0 || diff.touch_infra) {
+      needs_analysis = true;
+      needs_reasoning = true;
+    }
+    if (diff.file_count >= 25 || diff.additions + diff.deletions >= 800) {
+      needs_reasoning = true;
+    }
+  }
+  const baseTokens = Math.ceil(text2.length / 4);
+  const diffTokens = diff?.estimated_diff_tokens ?? 0;
   return {
     needs_reasoning,
     needs_code,
     needs_analysis,
-    estimated_context_tokens: Math.min(32e3, Math.ceil(text2.length / 4)),
+    estimated_context_tokens: Math.min(48e3, baseTokens + diffTokens),
     latency_preference: needs_reasoning ? "slow_ok" : "balanced",
-    source: kind === "unknown" ? "manual" : kind
+    source: kind === "unknown" ? "manual" : kind,
+    diff
+  };
+}
+function enrichWithDiff(collected, diff) {
+  return {
+    ...collected,
+    signals: inferSignals(collected.task, collected.kind, diff)
   };
 }
 function collectFromPayload(payload) {
@@ -32058,10 +32077,8 @@ ${body}`);
   };
 }
 
-// src/collectors/config.ts
-var import_node_fs = require("node:fs");
+// src/collectors/diff-signals.ts
 var import_node_path = require("node:path");
-var import_yaml = __toESM(require_dist(), 1);
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -36104,6 +36121,141 @@ var coerce = {
 };
 var NEVER = INVALID;
 
+// src/collectors/diff-signals.ts
+var DiffFileSchema = external_exports.object({
+  filename: external_exports.string().min(1).max(512),
+  status: external_exports.enum(["added", "removed", "modified", "renamed", "copied", "changed", "unchanged"]).or(external_exports.string()),
+  additions: external_exports.number().int().nonnegative().default(0),
+  deletions: external_exports.number().int().nonnegative().default(0),
+  changes: external_exports.number().int().nonnegative().optional(),
+  previous_filename: external_exports.string().optional()
+});
+var DiffSignalsSchema = external_exports.object({
+  file_count: external_exports.number().int().nonnegative(),
+  additions: external_exports.number().int().nonnegative(),
+  deletions: external_exports.number().int().nonnegative(),
+  languages: external_exports.array(external_exports.string()).max(32),
+  top_paths: external_exports.array(external_exports.string()).max(40),
+  sensitive_paths: external_exports.array(external_exports.string()).max(20),
+  touch_tests: external_exports.boolean(),
+  touch_infra: external_exports.boolean(),
+  touch_docs_only: external_exports.boolean(),
+  estimated_diff_tokens: external_exports.number().int().nonnegative()
+});
+var EXT_LANG = {
+  ".ts": "typescript",
+  ".tsx": "typescript",
+  ".js": "javascript",
+  ".jsx": "javascript",
+  ".mjs": "javascript",
+  ".cjs": "javascript",
+  ".py": "python",
+  ".go": "go",
+  ".rs": "rust",
+  ".java": "java",
+  ".kt": "kotlin",
+  ".rb": "ruby",
+  ".php": "php",
+  ".cs": "csharp",
+  ".swift": "swift",
+  ".md": "markdown",
+  ".yml": "yaml",
+  ".yaml": "yaml",
+  ".json": "json",
+  ".toml": "toml",
+  ".sql": "sql",
+  ".sh": "shell",
+  ".ps1": "powershell",
+  ".tf": "terraform",
+  ".dockerfile": "docker"
+};
+var SENSITIVE_PATTERNS = [
+  /(^|\/)(\.github\/workflows)\//i,
+  /(^|\/)(auth|oauth|iam|security|secret|secrets|crypto)\//i,
+  /(^|\/)(infra|terraform|pulumi|k8s|kubernetes|helm)\//i,
+  /(^|\/)(\.env|\.env\.|credentials|id_rsa)/i,
+  /(^|\/)(Dockerfile|docker-compose)/i
+];
+var TEST_PATTERNS = [/(^|\/)(tests?|__tests__|spec)\//i, /\.(test|spec)\.[a-z]+$/i];
+var INFRA_PATTERNS = [
+  /(^|\/)(\.github|infra|deploy|terraform|helm|k8s|kubernetes)\//i,
+  /\.(tf|yml|yaml)$/i
+];
+var DOC_PATTERNS = [/\.(md|mdx|txt|rst)$/i, /(^|\/)(docs|documentation)\//i];
+function languageFor(filename) {
+  const base = filename.toLowerCase();
+  if (base.endsWith("dockerfile") || base.includes("/dockerfile")) return "docker";
+  const ext = (0, import_node_path.extname)(base);
+  return EXT_LANG[ext] ?? null;
+}
+function isSensitive(filename) {
+  return SENSITIVE_PATTERNS.some((p) => p.test(filename));
+}
+function summarizeDiffFiles(files, maxPaths = 30) {
+  const parsed = files.map((f) => DiffFileSchema.parse(f));
+  const languages = /* @__PURE__ */ new Set();
+  const top_paths = [];
+  const sensitive_paths = [];
+  let additions = 0;
+  let deletions = 0;
+  let touch_tests = false;
+  let touch_infra = false;
+  let nonDoc = 0;
+  for (const file of parsed) {
+    additions += file.additions;
+    deletions += file.deletions;
+    const lang = languageFor(file.filename);
+    if (lang) languages.add(lang);
+    if (top_paths.length < maxPaths) top_paths.push(file.filename);
+    if (isSensitive(file.filename) && sensitive_paths.length < 20) {
+      sensitive_paths.push(file.filename);
+    }
+    if (TEST_PATTERNS.some((p) => p.test(file.filename))) touch_tests = true;
+    if (INFRA_PATTERNS.some((p) => p.test(file.filename))) touch_infra = true;
+    if (!DOC_PATTERNS.some((p) => p.test(file.filename))) nonDoc += 1;
+  }
+  const estimated_diff_tokens = Math.min(
+    48e3,
+    Math.ceil((additions + deletions) * 4 + parsed.length * 8)
+  );
+  return DiffSignalsSchema.parse({
+    file_count: parsed.length,
+    additions,
+    deletions,
+    languages: [...languages].sort(),
+    top_paths,
+    sensitive_paths,
+    touch_tests,
+    touch_infra,
+    touch_docs_only: parsed.length > 0 && nonDoc === 0,
+    estimated_diff_tokens
+  });
+}
+function toDiffFiles(files) {
+  return files.filter((f) => typeof f.filename === "string" && f.filename.length > 0).map(
+    (f) => DiffFileSchema.parse({
+      filename: f.filename,
+      status: f.status ?? "modified",
+      additions: f.additions ?? 0,
+      deletions: f.deletions ?? 0,
+      changes: f.changes,
+      previous_filename: f.previous_filename
+    })
+  );
+}
+
+// src/collectors/pull-diff.ts
+async function collectPullDiffSignals(pullNumber, client, options = {}) {
+  const maxFiles = options.maxFiles ?? 100;
+  const files = await client.listFiles(pullNumber);
+  return summarizeDiffFiles(toDiffFiles(files.slice(0, maxFiles)));
+}
+
+// src/collectors/config.ts
+var import_node_fs = require("node:fs");
+var import_node_path2 = require("node:path");
+var import_yaml = __toESM(require_dist(), 1);
+
 // src/schemas/enums.ts
 var REASON_CODES = [
   "HIGH_REASONING_NEED",
@@ -36170,7 +36322,8 @@ var TaskSignalsSchema = external_exports.object({
   needs_analysis: external_exports.boolean().default(false),
   estimated_context_tokens: external_exports.number().int().nonnegative().default(0),
   latency_preference: external_exports.enum(["fast", "balanced", "slow_ok"]).default("balanced"),
-  source: external_exports.enum(["issue", "pull_request", "manual"]).default("manual")
+  source: external_exports.enum(["issue", "pull_request", "manual"]).default("manual"),
+  diff: DiffSignalsSchema.optional()
 });
 var NavigatorInputsSchema = external_exports.object({
   task: external_exports.string().min(1).max(12e3),
@@ -36259,7 +36412,7 @@ var JeConfigSchema = external_exports.object({
   candidates: external_exports.array(ModelCandidateSchema).optional()
 });
 function loadJeConfig(workspacePath, relativePath = ".jev/config.yml") {
-  const full = (0, import_node_path.resolve)(workspacePath, relativePath);
+  const full = (0, import_node_path2.resolve)(workspacePath, relativePath);
   if (!(0, import_node_fs.existsSync)(full)) return {};
   const raw = import_yaml.default.parse((0, import_node_fs.readFileSync)(full, "utf8")) ?? {};
   return JeConfigSchema.parse(raw);
@@ -36284,7 +36437,7 @@ var CatalogFileSchema = external_exports.object({
   ).optional()
 });
 function loadModelCatalog(workspacePath, relativePath) {
-  const full = (0, import_node_path.resolve)(workspacePath, relativePath);
+  const full = (0, import_node_path2.resolve)(workspacePath, relativePath);
   if (!(0, import_node_fs.existsSync)(full)) {
     throw new Error(`Model catalog not found: ${relativePath}`);
   }
@@ -51072,7 +51225,7 @@ function buildSelectionQuestions(candidates) {
   return {
     selected_model: {
       type: "choice",
-      instructions: "Select the single best candidate model for this Issue/PR task. Consider reasoning, code, analysis needs, context size, speed, cost preference, and availability. Only choose a listed candidate id.",
+      instructions: "Select the single best candidate model for this Issue/PR task. Consider reasoning, code, analysis needs, PR diff signals when present (size, languages, sensitive paths, tests/infra), context size, speed, cost preference, and availability. Only choose a listed candidate id.",
       criteria
     },
     abstain: {
@@ -51086,7 +51239,7 @@ function buildSelectionQuestions(candidates) {
   };
 }
 function summarizeState(state) {
-  return {
+  const base = {
     task: state.task,
     signals: {
       needs_reasoning: state.signals.needs_reasoning,
@@ -51111,6 +51264,21 @@ function summarizeState(state) {
     })),
     note: state.note
   };
+  if (state.signals.diff) {
+    base.diff = {
+      file_count: state.signals.diff.file_count,
+      additions: state.signals.diff.additions,
+      deletions: state.signals.diff.deletions,
+      languages: [...state.signals.diff.languages],
+      top_paths: [...state.signals.diff.top_paths],
+      sensitive_paths: [...state.signals.diff.sensitive_paths],
+      touch_tests: state.signals.diff.touch_tests,
+      touch_infra: state.signals.diff.touch_infra,
+      touch_docs_only: state.signals.diff.touch_docs_only,
+      estimated_diff_tokens: state.signals.diff.estimated_diff_tokens
+    };
+  }
+  return base;
 }
 
 // src/jev/normalize.ts
@@ -51622,7 +51790,7 @@ function resolveApiKey(jevProvider) {
   if (jevProvider === "typesafe-native") {
     return process.env.TYPESAFE_API_KEY || void 0;
   }
-  return process.env.JEV_CUSTOM_API_KEY || process.env.CUSTOM_JEV_API_KEY || process.env.TYPESAFE_API_KEY || process.env.AI_GATEWAY_API_KEY || void 0;
+  return process.env.JEV_CUSTOM_API_KEY || process.env.CUSTOM_JEV_API_KEY || void 0;
 }
 function resolveCandidates(workspace, configCandidates, catalogPath) {
   const raw = core.getInput("candidates");
@@ -51647,7 +51815,7 @@ async function main() {
     core.getInput("budget_preference") || void 0,
     config2
   );
-  const collected = collectFromPayload(
+  let collected = collectFromPayload(
     github.context.payload
   );
   const taskOverride = core.getInput("task");
@@ -51674,12 +51842,44 @@ async function main() {
     config2.comment_on_github ?? false
   );
   const dry_run = readBoolean("dry_run", false);
+  const include_pr_diff = readBoolean("include_pr_diff", true);
   const timeout_ms = Number(core.getInput("timeout_ms") || 45e3);
   const jev_endpoint = core.getInput("jev_endpoint") || config2.jev_endpoint;
   const jev_model = core.getInput("jev_model") || config2.jev_model;
   const token = core.getInput("github_token") || process.env.GITHUB_TOKEN;
   const octokit = token ? github.getOctokit(token) : null;
   const issueNumber = collected.number ?? github.context.payload.issue?.number ?? github.context.payload.pull_request?.number;
+  if (include_pr_diff && collected.kind === "pull_request" && issueNumber && octokit) {
+    try {
+      const diff = await collectPullDiffSignals(Number(issueNumber), {
+        async listFiles(pullNumber) {
+          const files = await octokit.paginate(octokit.rest.pulls.listFiles, {
+            owner: github.context.repo.owner,
+            repo: github.context.repo.repo,
+            pull_number: pullNumber,
+            per_page: 100
+          });
+          return files.map((f) => ({
+            filename: f.filename,
+            status: f.status,
+            additions: f.additions,
+            deletions: f.deletions,
+            changes: f.changes,
+            previous_filename: f.previous_filename
+          }));
+        }
+      });
+      collected = enrichWithDiff(collected, diff);
+      core.info(
+        `PR diff signals: files=${diff.file_count} +${diff.additions}/-${diff.deletions} langs=${diff.languages.join(",") || "none"}`
+      );
+      core.setOutput("diff_file_count", String(diff.file_count));
+      core.setOutput("diff_languages", JSON.stringify(diff.languages));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      core.warning(`Failed to collect PR diff signals: ${message}`);
+    }
+  }
   const commentClient = octokit && issueNumber ? {
     async createComment(body) {
       await octokit.rest.issues.createComment({
@@ -51697,7 +51897,7 @@ async function main() {
   core.info(`Jev provider: ${jev_provider}`);
   core.info(`Candidates: ${candidates.map((c) => c.id).join(", ")}`);
   core.info(
-    "Data sent to Jev: sanitized task summary, task signals, candidate metadata, budget preference, confidence constraints. Secrets are never sent."
+    "Data sent to Jev: sanitized task summary, task signals, optional PR diff metadata (paths/counts only), candidate metadata, budget preference, confidence constraints. Secrets and patch hunks are never sent."
   );
   const result = await runNavigator({
     task,

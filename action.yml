@@ -54,8 +54,12 @@ inputs:
     description: When true, skips mutating GitHub writes (comments).
     required: false
     default: 'false'
+  include_pr_diff:
+    description: When true (default), collect compact PR file metadata (paths/counts, no patch hunks) for Jev.
+    required: false
+    default: 'true'
   github_token:
-    description: Token used only when comment_on_github is true.
+    description: Token used for PR file listing and optional comments.
     required: false
     default: ${{ github.token }}
 
@@ -76,6 +80,10 @@ outputs:
     description: true when the decision did not come from a live Jev response.
   summary:
     description: Short one-line summary suitable for logs.
+  diff_file_count:
+    description: Number of PR files summarized when include_pr_diff collected signals.
+  diff_languages:
+    description: JSON array of languages inferred from PR file paths.
 
 runs:
   using: node24
