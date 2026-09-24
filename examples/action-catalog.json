@@ -1,0 +1,245 @@
+{
+  "version": 1,
+  "actions": [
+    {
+      "id": "01-jev-model-navigator",
+      "repo": "jev-model-navigator",
+      "title": "JEV Model Navigator",
+      "objective": "Select which AI model should execute an Issue or PR task using Jev.",
+      "mvp_difficulty_hint": "MEDIUM",
+      "audience_hints": ["DEV", "DEVOPS"]
+    },
+    {
+      "id": "02-jev-ci-pathfinder",
+      "repo": "jev-ci-pathfinder",
+      "title": "JEV CI Pathfinder",
+      "objective": "Choose CI paths and jobs relevant to a change.",
+      "mvp_difficulty_hint": "HIGH",
+      "audience_hints": ["DEVOPS", "DEV"]
+    },
+    {
+      "id": "03-jev-security-sentinel",
+      "repo": "jev-security-sentinel",
+      "title": "JEV Security Sentinel",
+      "objective": "Triage security signals and decide response actions.",
+      "mvp_difficulty_hint": "VERY_HIGH",
+      "audience_hints": ["DEVSECOPS", "SRE"]
+    },
+    {
+      "id": "04-jev-cloud-cost-guardian",
+      "repo": "jev-cloud-cost-guardian",
+      "title": "JEV Cloud Cost Guardian",
+      "objective": "Detect and gate costly cloud changes.",
+      "mvp_difficulty_hint": "VERY_HIGH",
+      "audience_hints": ["FINOPS", "DEVOPS"]
+    },
+    {
+      "id": "05-jev-resource-rightsizer",
+      "repo": "jev-resource-rightsizer",
+      "title": "JEV Resource RightSizer",
+      "objective": "Recommend compute sizing changes safely.",
+      "mvp_difficulty_hint": "HIGH",
+      "audience_hints": ["FINOPS", "SRE"]
+    },
+    {
+      "id": "06-jev-test-intelligence",
+      "repo": "jev-test-intelligence",
+      "title": "JEV Test Intelligence",
+      "objective": "Select and prioritize tests for a change.",
+      "mvp_difficulty_hint": "HIGH",
+      "audience_hints": ["QA", "DEV"]
+    },
+    {
+      "id": "07-jev-flaky-detective",
+      "repo": "jev-flaky-detective",
+      "title": "JEV Flaky Detective",
+      "objective": "Identify flaky tests and quarantine policy.",
+      "mvp_difficulty_hint": "HIGH",
+      "audience_hints": ["QA", "DEV"]
+    },
+    {
+      "id": "08-jev-pr-profiler",
+      "repo": "jev-pr-profiler",
+      "title": "JEV Pull Request Profiler",
+      "objective": "Profile PR risk and size for routing.",
+      "mvp_difficulty_hint": "MEDIUM",
+      "audience_hints": ["DEV", "DEVOPS"]
+    },
+    {
+      "id": "09-jev-reviewer-navigator",
+      "repo": "jev-reviewer-navigator",
+      "title": "JEV Reviewer Navigator",
+      "objective": "Suggest reviewers for a pull request.",
+      "mvp_difficulty_hint": "MEDIUM",
+      "audience_hints": ["DEV", "PRODUCT"]
+    },
+    {
+      "id": "10-jev-release-oracle",
+      "repo": "jev-release-oracle",
+      "title": "JEV Release Oracle",
+      "objective": "Decide release readiness from signals.",
+      "mvp_difficulty_hint": "HIGH",
+      "audience_hints": ["DEVOPS", "PRODUCT"]
+    },
+    {
+      "id": "11-jev-rollout-conductor",
+      "repo": "jev-rollout-conductor",
+      "title": "JEV Rollout Conductor",
+      "objective": "Conduct progressive rollout decisions.",
+      "mvp_difficulty_hint": "VERY_HIGH",
+      "audience_hints": ["SRE", "DEVOPS"]
+    },
+    {
+      "id": "12-jev-rollback-guardian",
+      "repo": "jev-rollback-guardian",
+      "title": "JEV Rollback Guardian",
+      "objective": "Decide when to roll back a deployment.",
+      "mvp_difficulty_hint": "VERY_HIGH",
+      "audience_hints": ["SRE", "DEVOPS"]
+    },
+    {
+      "id": "13-jev-incident-commander",
+      "repo": "jev-incident-commander",
+      "title": "JEV Incident Commander",
+      "objective": "Coordinate incident response decisions.",
+      "mvp_difficulty_hint": "VERY_HIGH",
+      "audience_hints": ["SRE", "SUPPORT"]
+    },
+    {
+      "id": "14-jev-signal-correlator",
+      "repo": "jev-signal-correlator",
+      "title": "JEV Signal Correlator",
+      "objective": "Correlate observability signals into actionable groups.",
+      "mvp_difficulty_hint": "HIGH",
+      "audience_hints": ["SRE", "DEVOPS"]
+    },
+    {
+      "id": "15-jev-issue-dispatcher",
+      "repo": "jev-issue-dispatcher",
+      "title": "JEV Issue Dispatcher",
+      "objective": "Route issues to owners and queues.",
+      "mvp_difficulty_hint": "MEDIUM",
+      "audience_hints": ["SUPPORT", "PRODUCT"]
+    },
+    {
+      "id": "16-jev-request-classifier",
+      "repo": "jev-request-classifier",
+      "title": "JEV Request Classifier",
+      "objective": "Classify support or product requests.",
+      "mvp_difficulty_hint": "LOW",
+      "audience_hints": ["SUPPORT", "PRODUCT"]
+    },
+    {
+      "id": "17-jev-support-escalator",
+      "repo": "jev-support-escalator",
+      "title": "JEV Support Escalator",
+      "objective": "Decide support escalations.",
+      "mvp_difficulty_hint": "HIGH",
+      "audience_hints": ["SUPPORT", "SRE"]
+    },
+    {
+      "id": "18-jev-sla-watchtower",
+      "repo": "jev-sla-watchtower",
+      "title": "JEV SLA Watchtower",
+      "objective": "Watch SLA risk and alert policies.",
+      "mvp_difficulty_hint": "MEDIUM",
+      "audience_hints": ["SUPPORT", "PRODUCT"]
+    },
+    {
+      "id": "19-jev-debt-prioritizer",
+      "repo": "jev-debt-prioritizer",
+      "title": "JEV Debt Prioritizer",
+      "objective": "Prioritize technical debt items.",
+      "mvp_difficulty_hint": "MEDIUM",
+      "audience_hints": ["DEV", "PRODUCT"]
+    },
+    {
+      "id": "20-jev-dependency-steward",
+      "repo": "jev-dependency-steward",
+      "title": "JEV Dependency Steward",
+      "objective": "Steward dependency upgrades safely.",
+      "mvp_difficulty_hint": "HIGH",
+      "audience_hints": ["DEV", "DEVSECOPS"]
+    },
+    {
+      "id": "21-jev-license-guardian",
+      "repo": "jev-license-guardian",
+      "title": "JEV License Guardian",
+      "objective": "Guard license compliance decisions.",
+      "mvp_difficulty_hint": "MEDIUM",
+      "audience_hints": ["DEVSECOPS", "PRODUCT"]
+    },
+    {
+      "id": "22-jev-sbom-navigator",
+      "repo": "jev-sbom-navigator",
+      "title": "JEV SBOM Navigator",
+      "objective": "Navigate SBOM findings and gates.",
+      "mvp_difficulty_hint": "HIGH",
+      "audience_hints": ["DEVSECOPS", "DEVOPS"]
+    },
+    {
+      "id": "23-jev-api-compatibility-guard",
+      "repo": "jev-api-compatibility-guard",
+      "title": "JEV API Compatibility Guard",
+      "objective": "Guard API compatibility breaking changes.",
+      "mvp_difficulty_hint": "HIGH",
+      "audience_hints": ["DEV", "PRODUCT"]
+    },
+    {
+      "id": "24-jev-architecture-guardian",
+      "repo": "jev-architecture-guardian",
+      "title": "JEV Architecture Guardian",
+      "objective": "Enforce architecture decision records and boundaries.",
+      "mvp_difficulty_hint": "HIGH",
+      "audience_hints": ["DEV", "PRODUCT"]
+    },
+    {
+      "id": "25-jev-documentation-navigator",
+      "repo": "jev-documentation-navigator",
+      "title": "JEV Documentation Navigator",
+      "objective": "Decide documentation updates for a change.",
+      "mvp_difficulty_hint": "MEDIUM",
+      "audience_hints": ["DEV", "PRODUCT"]
+    },
+    {
+      "id": "26-jev-accessibility-guardian",
+      "repo": "jev-accessibility-guardian",
+      "title": "JEV Accessibility Guardian",
+      "objective": "Gate accessibility regressions.",
+      "mvp_difficulty_hint": "HIGH",
+      "audience_hints": ["QA", "PRODUCT"]
+    },
+    {
+      "id": "27-jev-performance-sentinel",
+      "repo": "jev-performance-sentinel",
+      "title": "JEV Performance Sentinel",
+      "objective": "Detect performance regressions and decide gates.",
+      "mvp_difficulty_hint": "HIGH",
+      "audience_hints": ["SRE", "DEV"]
+    },
+    {
+      "id": "28-jev-monorepo-navigator",
+      "repo": "jev-monorepo-navigator",
+      "title": "JEV Monorepo Navigator",
+      "objective": "Navigate monorepo project graph for affected packages.",
+      "mvp_difficulty_hint": "VERY_HIGH",
+      "audience_hints": ["DEV", "DEVOPS"]
+    },
+    {
+      "id": "29-jev-artifact-architect",
+      "repo": "jev-artifact-architect",
+      "title": "JEV Artifact Architect",
+      "objective": "Decide artifact layout and packaging strategy.",
+      "mvp_difficulty_hint": "HIGH",
+      "audience_hints": ["DEVOPS", "DEV"]
+    },
+    {
+      "id": "30-jev-decision-engine",
+      "repo": "jev-decision-engine",
+      "title": "JEV Decision Engine",
+      "objective": "Generic typed decision Action and shared @jevforge/core contract.",
+      "mvp_difficulty_hint": "MEDIUM",
+      "audience_hints": ["DEV", "DEVOPS"]
+    }
+  ]
+}

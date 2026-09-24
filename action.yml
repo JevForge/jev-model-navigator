@@ -1,0 +1,85 @@
+name: JEV Model Navigator
+description: >
+  Uses TypeSafe Jev to select which AI model should handle an Issue or Pull Request task.
+  Returns selected_model, provider, confidence, and reason_codes. Default decision_only mode
+  recommends without invoking the selected model.
+author: JevForge
+branding:
+  icon: compass
+  color: blue
+
+inputs:
+  task:
+    description: Optional task override. Defaults to Issue/PR title + body.
+    required: false
+  candidates:
+    description: JSON array of model candidates. If empty, loads model_catalog_path or .jev/config.yml.
+    required: false
+  model_catalog_path:
+    description: Path to YAML/JSON model catalog relative to the workspace.
+    required: false
+    default: .jev/model-catalog.yml
+  min_confidence:
+    description: Minimum confidence (0-1) required to accept SELECT_MODEL.
+    required: false
+    default: '0.7'
+  decision_only:
+    description: When true (default), only recommend a model; do not invoke it.
+    required: false
+    default: 'true'
+  low_confidence_policy:
+    description: fail | warn | request-review | no-op
+    required: false
+    default: fail
+  jev_provider:
+    description: vercel-ai-gateway | typesafe-native | custom-compatible
+    required: false
+    default: vercel-ai-gateway
+  jev_endpoint:
+    description: HTTPS evaluate endpoint (required for custom-compatible; optional override for typesafe-native).
+    required: false
+  jev_model:
+    description: Jev model id for typesafe-native / custom-compatible (e.g. pinned catalog id). Gateway default is typesafe-ai/jev.
+    required: false
+  budget_preference:
+    description: cheapest | balanced | best_quality
+    required: false
+    default: balanced
+  timeout_ms:
+    description: Jev request timeout in milliseconds.
+    required: false
+    default: '45000'
+  comment_on_github:
+    description: When true, posts a summary comment on the Issue/PR.
+    required: false
+    default: 'false'
+  dry_run:
+    description: When true, skips mutating GitHub writes (comments).
+    required: false
+    default: 'false'
+  github_token:
+    description: Token used only when comment_on_github is true.
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  selected_model:
+    description: Selected candidate model id, or empty when abstaining/review.
+  provider:
+    description: Provider of the selected model (not the Jev access provider).
+  confidence:
+    description: Confidence score between 0 and 1.
+  reason_codes:
+    description: JSON array of stable reason codes.
+  decision:
+    description: SELECT_MODEL | ABSTAIN | REQUEST_REVIEW
+  explanation:
+    description: Human-readable explanation (never executed).
+  provisional:
+    description: true when the decision did not come from a live Jev response.
+  summary:
+    description: Short one-line summary suitable for logs.
+
+runs:
+  using: node24
+  main: dist/index.js

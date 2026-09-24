@@ -1,0 +1,16 @@
+{
+  "action_id": "26-jev-accessibility-guardian",
+  "repo": "jev-accessibility-guardian",
+  "selected_model_profile": "GPT-5.5",
+  "selected_model_id": "openai-gpt-5-5",
+  "development_difficulty": "HIGH",
+  "expected_public_use": "HIGH",
+  "rationale": "Provisional heuristic plan (Jev not invoked). Preferred capability=analysis; picked allowlisted candidate openai-gpt-5-5.",
+  "audience": [
+    "QA",
+    "PRODUCT"
+  ],
+  "confidence": 0.35,
+  "provisional": true,
+  "evaluated_at": "2026-09-24T05:29:18.165Z"
+}

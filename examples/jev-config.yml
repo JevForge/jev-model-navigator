@@ -1,0 +1,8 @@
+# Example consumer config (place at repo root as .jev/config.yml)
+jev_provider: vercel-ai-gateway
+min_confidence: 0.7
+low_confidence_policy: fail
+budget_preference: balanced
+decision_only: true
+comment_on_github: false
+model_catalog_path: .jev/model-catalog.yml

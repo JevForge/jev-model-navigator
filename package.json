@@ -1,0 +1,44 @@
+{
+  "name": "jev-model-navigator",
+  "version": "0.1.0",
+  "description": "GitHub Action that uses Jev to select which AI model should handle an Issue or Pull Request task.",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "batch:plan": "tsx src/batch/cli.ts",
+    "all": "npm run typecheck && npm test && npm run build"
+  },
+  "keywords": [
+    "github-actions",
+    "jev",
+    "typesafe",
+    "model-routing",
+    "jevforge"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@actions/core": "^1.11.1",
+    "@actions/github": "^6.0.1",
+    "ai": "^7.0.113",
+    "yaml": "^2.8.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "esbuild": "^0.25.12",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.9"
+  },
+  "allowScripts": {
+    "esbuild@0.25.12": true,
+    "esbuild@0.28.2": true
+  }
+}

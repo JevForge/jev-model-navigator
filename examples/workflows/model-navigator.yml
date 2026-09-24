@@ -1,0 +1,39 @@
+name: Model Navigator
+
+on:
+  issues:
+    types: [opened, edited, reopened]
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  navigate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select model with Jev
+        id: nav
+        uses: ./
+        env:
+          AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
+        with:
+          jev_provider: vercel-ai-gateway
+          model_catalog_path: examples/model-catalog.yml
+          decision_only: 'true'
+          comment_on_github: 'true'
+          low_confidence_policy: warn
+          min_confidence: '0.7'
+
+      - name: Show recommendation
+        run: |
+          echo "decision=${{ steps.nav.outputs.decision }}"
+          echo "selected_model=${{ steps.nav.outputs.selected_model }}"
+          echo "provider=${{ steps.nav.outputs.provider }}"
+          echo "confidence=${{ steps.nav.outputs.confidence }}"
+          echo "summary=${{ steps.nav.outputs.summary }}"
