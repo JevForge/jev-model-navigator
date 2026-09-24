@@ -6,7 +6,7 @@
 
 - Marketplace: https://github.com/marketplace/actions/jev-model-navigator
 - Repository: https://github.com/JevForge/jev-model-navigator
-- Current release: https://github.com/JevForge/jev-model-navigator/releases/tag/v0.1.1
+- Current release: https://github.com/JevForge/jev-model-navigator/releases/tag/v0.4.0
 
 ## Listing
 
