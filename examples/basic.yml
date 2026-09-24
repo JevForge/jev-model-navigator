@@ -1,1 +1,38 @@
-# Minimal example — outputs only## Copy .jev/model-catalog.yml from examples/model-catalog.yml# Secret: AI_GATEWAY_API_KEYname: Model Navigator (basic)on:  workflow_dispatch:  issues:    types: [opened]permissions:  contents: readjobs:  navigate:    runs-on: ubuntu-latest    steps:      - uses: actions/checkout@v4      - id: nav        uses: JevForge/jev-model-navigator@v0.4.1        env:          AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}        with:          model_catalog_path: .jev/model-catalog.yml          decision_only: 'true'          create_check_run: 'false'          include_pr_diff: 'false'      - name: Print outputs        run: |          echo "decision=${{ steps.nav.outputs.decision }}"          echo "selected_model=${{ steps.nav.outputs.selected_model }}"          echo "alternate_model=${{ steps.nav.outputs.alternate_model }}"          echo "confidence=${{ steps.nav.outputs.confidence }}"          echo "summary=${{ steps.nav.outputs.summary }}"
+# Minimal example — outputs only
+#
+# Copy .jev/model-catalog.yml from examples/model-catalog.yml
+# Secret: AI_GATEWAY_API_KEY
+
+name: Model Navigator (basic)
+
+on:
+  workflow_dispatch:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+
+jobs:
+  navigate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: nav
+        uses: JevForge/jev-model-navigator@v0.4.1
+        env:
+          AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
+        with:
+          model_catalog_path: .jev/model-catalog.yml
+          decision_only: 'true'
+          create_check_run: 'false'
+          include_pr_diff: 'false'
+
+      - name: Print outputs
+        run: |
+          echo "decision=${{ steps.nav.outputs.decision }}"
+          echo "selected_model=${{ steps.nav.outputs.selected_model }}"
+          echo "alternate_model=${{ steps.nav.outputs.alternate_model }}"
+          echo "confidence=${{ steps.nav.outputs.confidence }}"
+          echo "summary=${{ steps.nav.outputs.summary }}"

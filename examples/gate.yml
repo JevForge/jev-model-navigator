@@ -1,1 +1,46 @@
-# Gate later steps on the navigator decision## Secret: AI_GATEWAY_API_KEYname: Model Navigator (gate)on:  pull_request:    types: [opened, synchronize]permissions:  contents: read  checks: write  pull-requests: readjobs:  navigate:    runs-on: ubuntu-latest    outputs:      decision: ${{ steps.nav.outputs.decision }}      model: ${{ steps.nav.outputs.selected_model }}    steps:      - uses: actions/checkout@v4      - id: nav        uses: JevForge/jev-model-navigator@v0.4.1        env:          AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}        with:          model_catalog_path: .jev/model-catalog.yml          create_check_run: 'true'          low_confidence_policy: request-review  route:    needs: navigate    runs-on: ubuntu-latest    if: needs.navigate.outputs.decision == 'SELECT_MODEL'    steps:      - run: echo "Route coding agent to ${{ needs.navigate.outputs.model }}"  review:    needs: navigate    runs-on: ubuntu-latest    if: needs.navigate.outputs.decision == 'REQUEST_REVIEW'    steps:      - run: echo "Human review required before model routing"
+# Gate later steps on the navigator decision
+#
+# Secret: AI_GATEWAY_API_KEY
+
+name: Model Navigator (gate)
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: read
+
+jobs:
+  navigate:
+    runs-on: ubuntu-latest
+    outputs:
+      decision: ${{ steps.nav.outputs.decision }}
+      model: ${{ steps.nav.outputs.selected_model }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: nav
+        uses: JevForge/jev-model-navigator@v0.4.1
+        env:
+          AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
+        with:
+          model_catalog_path: .jev/model-catalog.yml
+          create_check_run: 'true'
+          low_confidence_policy: request-review
+
+  route:
+    needs: navigate
+    runs-on: ubuntu-latest
+    if: needs.navigate.outputs.decision == 'SELECT_MODEL'
+    steps:
+      - run: echo "Route coding agent to ${{ needs.navigate.outputs.model }}"
+
+  review:
+    needs: navigate
+    runs-on: ubuntu-latest
+    if: needs.navigate.outputs.decision == 'REQUEST_REVIEW'
+    steps:
+      - run: echo "Human review required before model routing"
