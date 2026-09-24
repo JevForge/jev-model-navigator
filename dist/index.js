@@ -51685,6 +51685,76 @@ async function maybePostComment(enabled, dryRun, decision, client) {
   return "posted";
 }
 
+// src/executors/github-status.ts
+var MODEL_LABEL_PREFIX = "jev:model:";
+var DECISION_LABEL_PREFIX = "jev:decision:";
+var REVIEW_LABEL = "jev:review";
+function modelLabel(modelId) {
+  const raw = `${MODEL_LABEL_PREFIX}${modelId}`;
+  return raw.length <= 50 ? raw : `${raw.slice(0, 47)}...`;
+}
+function decisionLabel(decision) {
+  return `${DECISION_LABEL_PREFIX}${decision}`;
+}
+function desiredLabels(decision) {
+  const labels = [decisionLabel(decision.decision)];
+  if (decision.selected_model) labels.push(modelLabel(decision.selected_model));
+  if (decision.decision === "REQUEST_REVIEW") labels.push(REVIEW_LABEL);
+  return labels;
+}
+function isManagedLabel(name25) {
+  return name25.startsWith(MODEL_LABEL_PREFIX) || name25.startsWith(DECISION_LABEL_PREFIX) || name25 === REVIEW_LABEL;
+}
+async function applyNavigatorLabels(enabled, dryRun, decision, client) {
+  if (!enabled) return "skipped";
+  if (dryRun || !client) return "dry-run";
+  const current = await client.listLabels();
+  const preserved = current.filter((name25) => !isManagedLabel(name25));
+  const next = [.../* @__PURE__ */ new Set([...preserved, ...desiredLabels(decision)])];
+  for (const name25 of desiredLabels(decision)) {
+    await client.ensureLabel(name25);
+  }
+  await client.setLabels(next);
+  return "applied";
+}
+function checkConclusion(outcome) {
+  if (outcome.status === "ok") return "success";
+  if (outcome.status === "fail") return "failure";
+  return "neutral";
+}
+function buildCheckSummary(outcome) {
+  const d = outcome.decision;
+  return [
+    `### JEV Model Navigator`,
+    "",
+    `| Field | Value |`,
+    `| --- | --- |`,
+    `| Decision | \`${d.decision}\` |`,
+    `| Selected model | \`${d.selected_model ?? "none"}\` |`,
+    `| Model provider | \`${d.provider ?? "none"}\` |`,
+    `| Confidence | ${d.confidence.toFixed(3)} |`,
+    `| Policy | \`${outcome.status}\` |`,
+    `| Reason codes | ${d.reason_codes.map((c) => `\`${c}\``).join(", ")} |`,
+    "",
+    d.explanation || "_No explanation._"
+  ].join("\n");
+}
+async function maybeCreateCheckRun(enabled, dryRun, headSha, outcome, client) {
+  if (!enabled) return "skipped";
+  if (!headSha) return "skipped";
+  if (dryRun || !client) return "dry-run";
+  const conclusion = checkConclusion(outcome);
+  const title = outcome.decision.selected_model != null ? `${outcome.decision.decision}: ${outcome.decision.selected_model}` : outcome.decision.decision;
+  await client.createCheckRun({
+    name: "JEV Model Navigator",
+    headSha,
+    conclusion,
+    title,
+    summary: buildCheckSummary(outcome)
+  });
+  return "created";
+}
+
 // src/run.ts
 async function runNavigator(params) {
   const inputs = NavigatorInputsSchema.parse({
@@ -51740,13 +51810,34 @@ async function runNavigator(params) {
     outcome.decision,
     params.commentClient ?? null
   );
+  const labelStatus = await applyNavigatorLabels(
+    params.apply_labels,
+    inputs.dry_run,
+    outcome.decision,
+    params.labelClient ?? null
+  );
+  const checkStatus = await maybeCreateCheckRun(
+    params.create_check_run,
+    inputs.dry_run,
+    params.head_sha ?? null,
+    outcome,
+    params.checkRunClient ?? null
+  );
   const invokeDetail = await maybeInvokeSelectedModel(
     outcome.decision,
     inputs.decision_only,
     new NoopModelRunner(),
     inputs.task
   );
-  return { decision: outcome.decision, outcome, summary, commentStatus, invokeDetail };
+  return {
+    decision: outcome.decision,
+    outcome,
+    summary,
+    commentStatus,
+    labelStatus,
+    checkStatus,
+    invokeDetail
+  };
 }
 
 // src/github/outputs.ts
@@ -51841,6 +51932,8 @@ async function main() {
     "comment_on_github",
     config2.comment_on_github ?? false
   );
+  const apply_labels = readBoolean("apply_labels", false);
+  const create_check_run = readBoolean("create_check_run", true);
   const dry_run = readBoolean("dry_run", false);
   const include_pr_diff = readBoolean("include_pr_diff", true);
   const timeout_ms = Number(core.getInput("timeout_ms") || 45e3);
@@ -51890,6 +51983,55 @@ async function main() {
       });
     }
   } : null;
+  const labelClient = octokit && issueNumber ? {
+    async listLabels() {
+      const issue2 = await octokit.rest.issues.get({
+        owner: github.context.repo.owner,
+        repo: github.context.repo.repo,
+        issue_number: Number(issueNumber)
+      });
+      return (issue2.data.labels ?? []).map((label) => typeof label === "string" ? label : label.name).filter((name25) => typeof name25 === "string");
+    },
+    async ensureLabel(name25) {
+      try {
+        await octokit.rest.issues.createLabel({
+          owner: github.context.repo.owner,
+          repo: github.context.repo.repo,
+          name: name25,
+          color: "0E8A16",
+          description: "Managed by JEV Model Navigator"
+        });
+      } catch (error) {
+        const status = error && typeof error === "object" && "status" in error ? Number(error.status) : void 0;
+        if (status !== 422) throw error;
+      }
+    },
+    async setLabels(next) {
+      await octokit.rest.issues.setLabels({
+        owner: github.context.repo.owner,
+        repo: github.context.repo.repo,
+        issue_number: Number(issueNumber),
+        labels: next
+      });
+    }
+  } : null;
+  const headSha = github.context.payload.pull_request?.head?.sha ?? github.context.sha ?? null;
+  const checkRunClient = octokit ? {
+    async createCheckRun(input) {
+      await octokit.rest.checks.create({
+        owner: github.context.repo.owner,
+        repo: github.context.repo.repo,
+        name: input.name,
+        head_sha: input.headSha,
+        status: "completed",
+        conclusion: input.conclusion,
+        output: {
+          title: input.title,
+          summary: input.summary
+        }
+      });
+    }
+  } : null;
   const signals = {
     ...collected.signals,
     source: collected.kind === "issue" || collected.kind === "pull_request" ? collected.kind : collected.signals.source
@@ -51912,9 +52054,14 @@ async function main() {
     jev_model: jev_model || void 0,
     timeout_ms,
     comment_on_github,
+    apply_labels,
+    create_check_run,
     dry_run,
+    head_sha: headSha,
     apiKey: resolveApiKey(jev_provider),
-    commentClient
+    commentClient,
+    labelClient,
+    checkRunClient
   });
   applyPolicyToAction(
     {
@@ -51926,7 +52073,11 @@ async function main() {
     result.outcome,
     result.summary
   );
+  core.setOutput("label_status", result.labelStatus);
+  core.setOutput("check_status", result.checkStatus);
   core.info(`Comment: ${result.commentStatus}`);
+  core.info(`Labels: ${result.labelStatus}`);
+  core.info(`Check run: ${result.checkStatus}`);
   if (result.invokeDetail) core.info(result.invokeDetail);
 }
 main().catch((error) => {

@@ -10,6 +10,12 @@ import { applyConfidencePolicy, enforceAllowlist } from './decision/policy.js';
 import type { PolicyOutcome } from './decision/policy.js';
 import { NoopModelRunner, maybeInvokeSelectedModel } from './executors/model-runner.js';
 import { maybePostComment, type CommentClient } from './executors/comment.js';
+import {
+  applyNavigatorLabels,
+  maybeCreateCheckRun,
+  type CheckRunClient,
+  type LabelClient,
+} from './executors/github-status.js';
 import { sanitizeTaskText } from './utils/sanitize.js';
 
 export interface RunNavigatorParams {
@@ -25,10 +31,15 @@ export interface RunNavigatorParams {
   jev_model?: string;
   timeout_ms: number;
   comment_on_github: boolean;
+  apply_labels: boolean;
+  create_check_run: boolean;
   dry_run: boolean;
+  head_sha?: string | null;
   apiKey?: string;
   fetchImpl?: typeof fetch;
   commentClient?: CommentClient | null;
+  labelClient?: LabelClient | null;
+  checkRunClient?: CheckRunClient | null;
 }
 
 export interface RunNavigatorResult {
@@ -36,6 +47,8 @@ export interface RunNavigatorResult {
   outcome: PolicyOutcome;
   summary: string;
   commentStatus: 'posted' | 'dry-run' | 'skipped';
+  labelStatus: 'applied' | 'dry-run' | 'skipped';
+  checkStatus: 'created' | 'dry-run' | 'skipped';
   invokeDetail: string | null;
 }
 
@@ -100,6 +113,21 @@ export async function runNavigator(params: RunNavigatorParams): Promise<RunNavig
     params.commentClient ?? null,
   );
 
+  const labelStatus = await applyNavigatorLabels(
+    params.apply_labels,
+    inputs.dry_run,
+    outcome.decision,
+    params.labelClient ?? null,
+  );
+
+  const checkStatus = await maybeCreateCheckRun(
+    params.create_check_run,
+    inputs.dry_run,
+    params.head_sha ?? null,
+    outcome,
+    params.checkRunClient ?? null,
+  );
+
   const invokeDetail = await maybeInvokeSelectedModel(
     outcome.decision,
     inputs.decision_only,
@@ -107,5 +135,13 @@ export async function runNavigator(params: RunNavigatorParams): Promise<RunNavig
     inputs.task,
   );
 
-  return { decision: outcome.decision, outcome, summary, commentStatus, invokeDetail };
+  return {
+    decision: outcome.decision,
+    outcome,
+    summary,
+    commentStatus,
+    labelStatus,
+    checkStatus,
+    invokeDetail,
+  };
 }

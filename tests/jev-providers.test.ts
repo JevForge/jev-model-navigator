@@ -125,6 +125,8 @@ describe('runNavigator integration', () => {
       jev_endpoint: 'https://example.test/v1/evaluate',
       timeout_ms: 5000,
       comment_on_github: false,
+      apply_labels: false,
+      create_check_run: false,
       dry_run: true,
       apiKey: 'test',
       fetchImpl: fetchImpl as unknown as typeof fetch,

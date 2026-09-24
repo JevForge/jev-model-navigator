@@ -10,6 +10,7 @@ permissions:
   contents: read
   issues: write
   pull-requests: write
+  checks: write
 
 jobs:
   navigate:
@@ -26,6 +27,9 @@ jobs:
           jev_provider: vercel-ai-gateway
           model_catalog_path: examples/model-catalog.yml
           decision_only: 'true'
+          include_pr_diff: 'true'
+          apply_labels: 'true'
+          create_check_run: 'true'
           comment_on_github: 'true'
           low_confidence_policy: warn
           min_confidence: '0.7'
