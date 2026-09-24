@@ -1,4 +1,5 @@
 import type { TaskSignals } from '../schemas/navigator.js';
+import type { DiffSignals } from './diff-signals.js';
 import { sanitizeTaskText } from '../utils/sanitize.js';
 
 export type GithubEventKind = 'issue' | 'pull_request' | 'unknown';
@@ -13,22 +14,52 @@ export interface CollectedGithubTask {
   htmlUrl: string | null;
 }
 
-function inferSignals(text: string, kind: GithubEventKind): TaskSignals {
+function inferSignals(
+  text: string,
+  kind: GithubEventKind,
+  diff?: DiffSignals,
+): TaskSignals {
   const lower = text.toLowerCase();
-  const needs_code =
+  let needs_code =
     /\b(code|implement|bug|fix|refactor|typescript|python|api|pr)\b/.test(lower) ||
     kind === 'pull_request';
-  const needs_reasoning =
+  let needs_reasoning =
     /\b(design|architect|trade-?off|why|plan|strategy|decide)\b/.test(lower);
-  const needs_analysis =
+  let needs_analysis =
     /\b(analy[sz]e|investigate|root cause|perf|security|audit)\b/.test(lower);
+
+  if (diff) {
+    if (diff.file_count > 0 && !diff.touch_docs_only) needs_code = true;
+    if (diff.sensitive_paths.length > 0 || diff.touch_infra) {
+      needs_analysis = true;
+      needs_reasoning = true;
+    }
+    if (diff.file_count >= 25 || diff.additions + diff.deletions >= 800) {
+      needs_reasoning = true;
+    }
+  }
+
+  const baseTokens = Math.ceil(text.length / 4);
+  const diffTokens = diff?.estimated_diff_tokens ?? 0;
+
   return {
     needs_reasoning,
     needs_code,
     needs_analysis,
-    estimated_context_tokens: Math.min(32_000, Math.ceil(text.length / 4)),
+    estimated_context_tokens: Math.min(48_000, baseTokens + diffTokens),
     latency_preference: needs_reasoning ? 'slow_ok' : 'balanced',
     source: kind === 'unknown' ? 'manual' : kind,
+    diff,
+  };
+}
+
+export function enrichWithDiff(
+  collected: CollectedGithubTask,
+  diff: DiffSignals,
+): CollectedGithubTask {
+  return {
+    ...collected,
+    signals: inferSignals(collected.task, collected.kind, diff),
   };
 }
 
@@ -52,7 +83,6 @@ export function collectFromPayload(payload: Record<string, unknown>): CollectedG
   }
 
   if (issue && typeof issue === 'object') {
-    // PRs also appear as issues in some events; prefer pull_request field when present
     if (issue.pull_request) {
       const title = String(issue.title ?? '');
       const body = String(issue.body ?? '');

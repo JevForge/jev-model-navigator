@@ -1,6 +1,7 @@
 import * as core from '@actions/core';
 import * as github from '@actions/github';
-import { collectFromPayload } from './collectors/github-event.js';
+import { collectFromPayload, enrichWithDiff } from './collectors/github-event.js';
+import { collectPullDiffSignals } from './collectors/pull-diff.js';
 import {
   coalesceBudget,
   coalescePolicy,
@@ -27,14 +28,7 @@ function resolveApiKey(jevProvider: string): string | undefined {
   if (jevProvider === 'typesafe-native') {
     return process.env.TYPESAFE_API_KEY || undefined;
   }
-  // custom-compatible
-  return (
-    process.env.JEV_CUSTOM_API_KEY ||
-    process.env.CUSTOM_JEV_API_KEY ||
-    process.env.TYPESAFE_API_KEY ||
-    process.env.AI_GATEWAY_API_KEY ||
-    undefined
-  );
+  return process.env.JEV_CUSTOM_API_KEY || process.env.CUSTOM_JEV_API_KEY || undefined;
 }
 
 function resolveCandidates(
@@ -67,7 +61,7 @@ async function main(): Promise<void> {
     config,
   );
 
-  const collected = collectFromPayload(
+  let collected = collectFromPayload(
     github.context.payload as Record<string, unknown>,
   );
   const taskOverride = core.getInput('task');
@@ -96,6 +90,7 @@ async function main(): Promise<void> {
     config.comment_on_github ?? false,
   );
   const dry_run = readBoolean('dry_run', false);
+  const include_pr_diff = readBoolean('include_pr_diff', true);
   const timeout_ms = Number(core.getInput('timeout_ms') || 45_000);
   const jev_endpoint = core.getInput('jev_endpoint') || config.jev_endpoint;
   const jev_model = core.getInput('jev_model') || config.jev_model;
@@ -106,6 +101,43 @@ async function main(): Promise<void> {
     collected.number ??
     github.context.payload.issue?.number ??
     github.context.payload.pull_request?.number;
+
+  if (
+    include_pr_diff &&
+    collected.kind === 'pull_request' &&
+    issueNumber &&
+    octokit
+  ) {
+    try {
+      const diff = await collectPullDiffSignals(Number(issueNumber), {
+        async listFiles(pullNumber) {
+          const files = await octokit.paginate(octokit.rest.pulls.listFiles, {
+            owner: github.context.repo.owner,
+            repo: github.context.repo.repo,
+            pull_number: pullNumber,
+            per_page: 100,
+          });
+          return files.map(f => ({
+            filename: f.filename,
+            status: f.status,
+            additions: f.additions,
+            deletions: f.deletions,
+            changes: f.changes,
+            previous_filename: f.previous_filename,
+          }));
+        },
+      });
+      collected = enrichWithDiff(collected, diff);
+      core.info(
+        `PR diff signals: files=${diff.file_count} +${diff.additions}/-${diff.deletions} langs=${diff.languages.join(',') || 'none'}`,
+      );
+      core.setOutput('diff_file_count', String(diff.file_count));
+      core.setOutput('diff_languages', JSON.stringify(diff.languages));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      core.warning(`Failed to collect PR diff signals: ${message}`);
+    }
+  }
 
   const commentClient =
     octokit && issueNumber
@@ -132,7 +164,7 @@ async function main(): Promise<void> {
   core.info(`Jev provider: ${jev_provider}`);
   core.info(`Candidates: ${candidates.map(c => c.id).join(', ')}`);
   core.info(
-    'Data sent to Jev: sanitized task summary, task signals, candidate metadata, budget preference, confidence constraints. Secrets are never sent.',
+    'Data sent to Jev: sanitized task summary, task signals, optional PR diff metadata (paths/counts only), candidate metadata, budget preference, confidence constraints. Secrets and patch hunks are never sent.',
   );
 
   const result = await runNavigator({

@@ -8,6 +8,7 @@ import {
   LOW_CONFIDENCE_POLICIES,
   REASON_CODES,
 } from './enums.js';
+import { DiffSignalsSchema } from '../collectors/diff-signals.js';
 
 export const ModelCandidateSchema = z.object({
   id: z.string().min(1).max(128),
@@ -31,6 +32,7 @@ export const TaskSignalsSchema = z.object({
   estimated_context_tokens: z.number().int().nonnegative().default(0),
   latency_preference: z.enum(['fast', 'balanced', 'slow_ok']).default('balanced'),
   source: z.enum(['issue', 'pull_request', 'manual']).default('manual'),
+  diff: DiffSignalsSchema.optional(),
 });
 
 export type TaskSignals = z.infer<typeof TaskSignalsSchema>;

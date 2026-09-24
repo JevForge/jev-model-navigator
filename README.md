@@ -27,18 +27,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - id: nav
-        uses: JevForge/jev-model-navigator@v0.1.1
+        uses: JevForge/jev-model-navigator@v0.2.0
         env:
           AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
         with:
           jev_provider: vercel-ai-gateway
           model_catalog_path: .jev/model-catalog.yml
           decision_only: 'true'
+          include_pr_diff: 'true'
           comment_on_github: 'true'
       - run: echo "${{ steps.nav.outputs.selected_model }} (${{ steps.nav.outputs.confidence }})"
 ```
 
-Pin `@v0.1.1` for reproducibility, or `@v0` for the floating major.
+Pin `@v0.2.0` for reproducibility, or `@v0` for the floating major.
 
 Marketplace: [JEV Model Navigator](https://github.com/marketplace/actions/jev-model-navigator)
 
@@ -119,10 +120,11 @@ Configuration may also live in `.jev/config.yml` (see `examples/jev-config.yml`)
 Only:
 - sanitized Issue/PR task text (truncated, secrets redacted)
 - derived task signals (booleans / token estimate)
+- optional PR diff **metadata** when `include_pr_diff` is true: file paths, languages, additions/deletions, sensitive/test/infra flags (never patch hunks)
 - candidate metadata (id, provider, capabilities, context, cost tier, availability)
 - budget preference and confidence constraints
 
-Never: GitHub tokens, API keys, raw checkout blobs, or unrelated secrets.
+Never: GitHub tokens, API keys, raw patch hunks, checkout blobs, or unrelated secrets.
 
 ## Permissions
 
