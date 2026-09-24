@@ -1,0 +1,41 @@
+# Pull Request example — diff signals + Check Run
+#
+# Secret: AI_GATEWAY_API_KEY
+# Catalog: .jev/model-catalog.yml
+
+name: Model Navigator (PR)
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+jobs:
+  navigate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: nav
+        uses: JevForge/jev-model-navigator@v0.4.0
+        env:
+          AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
+        with:
+          model_catalog_path: .jev/model-catalog.yml
+          decision_only: 'true'
+          include_pr_diff: 'true'
+          create_check_run: 'true'
+          comment_on_github: 'true'
+          low_confidence_policy: warn
+
+      - name: Show ranking
+        run: |
+          echo "selected=${{ steps.nav.outputs.selected_model }}"
+          echo "alternate=${{ steps.nav.outputs.alternate_model }}"
+          echo "ranked=${{ steps.nav.outputs.ranked_models }}"
+          echo "diff_files=${{ steps.nav.outputs.diff_file_count }}"
+          echo "langs=${{ steps.nav.outputs.diff_languages }}"

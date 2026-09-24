@@ -1,7 +1,7 @@
 {
   "name": "jev-model-navigator",
   "version": "0.4.0",
-  "description": "GitHub Action that uses Jev to select which AI model should handle an Issue or Pull Request task.",
+  "description": "GitHub Action that routes Issues and PRs to the best AI model using typed TypeSafe Jev decisions.",
   "private": true,
   "type": "module",
   "engines": {

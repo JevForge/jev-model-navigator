@@ -38,6 +38,7 @@ jobs:
         run: |
           echo "decision=${{ steps.nav.outputs.decision }}"
           echo "selected_model=${{ steps.nav.outputs.selected_model }}"
+          echo "alternate_model=${{ steps.nav.outputs.alternate_model }}"
           echo "provider=${{ steps.nav.outputs.provider }}"
           echo "confidence=${{ steps.nav.outputs.confidence }}"
           echo "summary=${{ steps.nav.outputs.summary }}"

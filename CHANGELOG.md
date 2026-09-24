@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+* Professional open-source documentation (README, CONTRIBUTING, SECURITY).
+* Clarified `action.yml` descriptions for Marketplace consumers.
+* Added example workflows (`examples/basic.yml`, `pr.yml`, `gate.yml`).
+* Added Issue and Pull Request templates.
+* Prefixed runtime errors with `[JEV Model Navigator]` for clearer CI logs.
+
 ## 0.4.0
 
 - Ask Jev for an `alternate_model` fallback (different allowlisted candidate) after primary selection.
