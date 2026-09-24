@@ -1,5 +1,5 @@
 name: JEV Model Navigator
-description: Select the best AI model for an Issue or PR task using TypeSafe Jev.
+description: Route Issues and PRs to the best AI model using typed Jev decisions in CI/CD.
 author: JevForge
 branding:
   icon: compass
@@ -7,13 +7,13 @@ branding:
 
 inputs:
   task:
-    description: Optional task override. Defaults to Issue/PR title + body.
+    description: Optional task text override. Defaults to the Issue or Pull Request title and body.
     required: false
   candidates:
     description: JSON array of model candidates. If empty, loads model_catalog_path or .jev/config.yml.
     required: false
   model_catalog_path:
-    description: Path to YAML/JSON model catalog relative to the workspace.
+    description: Workspace-relative path to a YAML/JSON model catalog.
     required: false
     default: .jev/model-catalog.yml
   min_confidence:
@@ -25,21 +25,21 @@ inputs:
     required: false
     default: 'true'
   low_confidence_policy:
-    description: fail | warn | request-review | no-op
+    description: Behavior when confidence is low or Jev is unavailable (fail, warn, request-review, no-op).
     required: false
     default: fail
   jev_provider:
-    description: vercel-ai-gateway | typesafe-native | custom-compatible
+    description: How to reach Jev (vercel-ai-gateway, typesafe-native, custom-compatible). Not the selected model vendor.
     required: false
     default: vercel-ai-gateway
   jev_endpoint:
     description: HTTPS evaluate endpoint (required for custom-compatible; optional override for typesafe-native).
     required: false
   jev_model:
-    description: Jev model id for typesafe-native / custom-compatible (e.g. pinned catalog id). Gateway default is typesafe-ai/jev.
+    description: Jev model id for typesafe-native or custom-compatible. Gateway default is typesafe-ai/jev.
     required: false
   budget_preference:
-    description: cheapest | balanced | best_quality
+    description: Cost/quality preference passed to Jev (cheapest, balanced, best_quality).
     required: false
     default: balanced
   timeout_ms:
@@ -47,7 +47,7 @@ inputs:
     required: false
     default: '45000'
   comment_on_github:
-    description: When true, posts a summary comment on the Issue/PR.
+    description: When true, post a summary comment on the Issue or Pull Request.
     required: false
     default: 'false'
   apply_labels:
@@ -55,27 +55,27 @@ inputs:
     required: false
     default: 'false'
   create_check_run:
-    description: When true (default), create a GitHub Check Run for the head SHA (PRs/pushes).
+    description: When true (default), create a GitHub Check Run for the head SHA.
     required: false
     default: 'true'
   dry_run:
-    description: When true, skips mutating GitHub writes (comments, labels, check runs).
+    description: When true, skip mutating GitHub writes (comments, labels, check runs).
     required: false
     default: 'false'
   include_pr_diff:
-    description: When true (default), collect compact PR file metadata (paths/counts, no patch hunks) for Jev.
+    description: When true (default), collect compact PR file metadata (paths and counts only; no patch hunks).
     required: false
     default: 'true'
   github_token:
-    description: Token used for PR file listing and optional comments.
+    description: Token for PR file listing and optional comments, labels, or check runs. Defaults to github.token.
     required: false
     default: ${{ github.token }}
 
 outputs:
   selected_model:
-    description: Selected candidate model id, or empty when abstaining/review.
+    description: Selected candidate model id, or empty when abstaining or requesting review.
   provider:
-    description: Provider of the selected model (not the Jev access provider).
+    description: Vendor of the selected model (not the Jev access provider).
   alternate_model:
     description: Fallback candidate model id (different from selected_model), or empty.
   ranked_models:
@@ -85,9 +85,9 @@ outputs:
   reason_codes:
     description: JSON array of stable reason codes.
   decision:
-    description: SELECT_MODEL | ABSTAIN | REQUEST_REVIEW
+    description: SELECT_MODEL, ABSTAIN, or REQUEST_REVIEW.
   explanation:
-    description: Human-readable explanation (never executed).
+    description: Human-readable explanation for display only (never executed).
   provisional:
     description: true when the decision did not come from a live Jev response.
   summary:
@@ -97,9 +97,9 @@ outputs:
   diff_languages:
     description: JSON array of languages inferred from PR file paths.
   label_status:
-    description: applied | dry-run | skipped
+    description: applied, dry-run, or skipped.
   check_status:
-    description: created | dry-run | skipped
+    description: created, dry-run, or skipped.
 
 runs:
   using: node24

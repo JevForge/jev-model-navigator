@@ -1,15 +1,49 @@
 # Contributing
 
-1. Use Node.js 24+.
-2. Run `npm test` and `npm run build` before opening a PR.
-3. Keep public identifiers, runtime messages, and docs in English.
-4. Do not commit secrets or `.env` files.
-5. Prefer additive schema changes; treat Action outputs as a SemVer contract.
+Thanks for contributing to **JEV Model Navigator**.
 
-## Layout
+## Requirements
 
-- `src/collectors` — Issue/PR and config loading
-- `src/jev` — Jev providers and normalization
-- `src/decision` — deterministic policies
-- `src/executors` — comments / future runners
-- `tests` — unit, contract, and integration tests
+- Node.js **24+**
+- npm
+
+## Setup
+
+```bash
+git clone https://github.com/JevForge/jev-model-navigator.git
+cd jev-model-navigator
+npm install
+```
+
+## Develop
+
+```bash
+npm test
+npm run typecheck
+npm run build
+```
+
+`dist/index.js` is the shipped Action entrypoint and must be rebuilt after TypeScript changes.
+
+## Guidelines
+
+- Keep public identifiers, runtime messages, and docs in **English**.
+- Do not commit secrets, `.env`, or API keys.
+- Prefer additive schema/output changes; treat Action outputs as a SemVer contract.
+- Open Issues for bugs/features; open PRs against `main`.
+- Never paste credentials into Issues, PRs, or logs.
+
+## Project layout
+
+| Path | Role |
+| ---- | ---- |
+| `src/collectors` | Issue/PR payload, config, diff signals |
+| `src/jev` | Jev providers and normalization |
+| `src/decision` | Deterministic confidence policy |
+| `src/executors` | Comments, labels, check runs |
+| `tests` | Unit and contract tests |
+| `examples` | Workflow and catalog samples |
+
+## Pull requests
+
+Use the PR template checklist. Include a short summary of user-facing impact.

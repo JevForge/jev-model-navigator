@@ -52062,7 +52062,7 @@ async function main() {
   const task = sanitizeTaskText(taskOverride || collected.task);
   if (!task) {
     throw new Error(
-      "No task text found. Open this Action on issues/pull_request events or pass input `task`."
+      "[JEV Model Navigator] No task text found. Use issues/pull_request events or pass input `task`."
     );
   }
   const candidates = resolveCandidates(
@@ -52119,7 +52119,7 @@ async function main() {
       core.setOutput("diff_languages", JSON.stringify(diff.languages));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      core.warning(`Failed to collect PR diff signals: ${message}`);
+      core.warning(`[JEV Model Navigator] Failed to collect PR diff signals: ${message}`);
     }
   }
   const commentClient = octokit && issueNumber ? {
@@ -52231,5 +52231,6 @@ async function main() {
 }
 main().catch((error) => {
   const message = error instanceof Error ? error.message : String(error);
-  core.setFailed(message);
+  const prefixed = message.startsWith("[JEV Model Navigator]") ? message : `[JEV Model Navigator] ${message}`;
+  core.setFailed(prefixed);
 });
