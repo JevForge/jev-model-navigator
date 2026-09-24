@@ -59,6 +59,8 @@ export const NavigatorDecisionSchema = z
     decision: z.enum(DECISIONS),
     selected_model: z.string().nullable(),
     provider: z.string().nullable(),
+    alternate_model: z.string().nullable().default(null),
+    ranked_models: z.array(z.string()).max(8).default([]),
     confidence: z.number().min(0).max(1),
     reason_codes: z.array(z.enum(REASON_CODES)).min(1).max(16),
     explanation: z.string().max(2_000).default(''),
@@ -86,6 +88,17 @@ export const NavigatorDecisionSchema = z
         code: z.ZodIssueCode.custom,
         message: 'Non-SELECT decisions must not set selected_model',
         path: ['selected_model'],
+      });
+    }
+    if (
+      value.alternate_model &&
+      value.selected_model &&
+      value.alternate_model === value.selected_model
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'alternate_model must differ from selected_model',
+        path: ['alternate_model'],
       });
     }
   });

@@ -27,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - id: nav
-        uses: JevForge/jev-model-navigator@v0.3.0
+        uses: JevForge/jev-model-navigator@v0.4.0
         env:
           AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
         with:
@@ -38,10 +38,10 @@ jobs:
           apply_labels: 'true'
           create_check_run: 'true'
           comment_on_github: 'true'
-      - run: echo "${{ steps.nav.outputs.selected_model }} (${{ steps.nav.outputs.confidence }})"
+      - run: echo "${{ steps.nav.outputs.selected_model }} / ${{ steps.nav.outputs.alternate_model }}"
 ```
 
-Pin `@v0.3.0` for reproducibility, or `@v0` for the floating major.
+Pin `@v0.4.0` for reproducibility, or `@v0` for the floating major.
 
 Marketplace: [JEV Model Navigator](https://github.com/marketplace/actions/jev-model-navigator)
 
@@ -100,6 +100,8 @@ For `vercel-ai-gateway`, Jev is called with AI SDK `experimental_evaluate` and m
 |---|---|
 | `selected_model` | Candidate id or empty |
 | `provider` | Selected **model** provider |
+| `alternate_model` | Fallback candidate id (never equals selected) |
+| `ranked_models` | JSON `[selected, alternate]` |
 | `confidence` | 0–1 |
 | `reason_codes` | JSON string array |
 | `decision` | `SELECT_MODEL` \| `ABSTAIN` \| `REQUEST_REVIEW` |

@@ -1,7 +1,12 @@
 import { createGateway, experimental_evaluate as evaluate } from 'ai';
 import type { JevProvider, JevProviderOptions, JevEvaluationState } from './types.js';
-import { buildSelectionQuestions, summarizeState } from './questions.js';
+import {
+  buildAlternateQuestions,
+  buildSelectionQuestions,
+  summarizeState,
+} from './questions.js';
 import { normalizeSelection, unavailableDecision } from './normalize.js';
+import { withAlternatePass } from './alternate.js';
 import type { NavigatorDecision } from '../schemas/navigator.js';
 
 function confidenceFromAnswer(answer: {
@@ -27,9 +32,10 @@ export function createVercelAiGatewayProvider(options: JevProviderOptions): JevP
       }
       try {
         const gateway = createGateway({ apiKey: options.apiKey });
+        const model = gateway.evaluationModel(options.model ?? 'typesafe-ai/jev');
         const questions = buildSelectionQuestions(state.candidates);
         const result = await evaluate({
-          model: gateway.evaluationModel(options.model ?? 'typesafe-ai/jev'),
+          model,
           state: JSON.stringify(summarizeState(state)),
           questions,
           maxRetries: 1,
@@ -52,7 +58,7 @@ export function createVercelAiGatewayProvider(options: JevProviderOptions): JevP
           }
         ).providerMetadata?.typesafe?.confidence?.selected_model;
 
-        return normalizeSelection(
+        const primary = normalizeSelection(
           {
             selectedModelId: selected.choice,
             confidence:
@@ -69,6 +75,29 @@ export function createVercelAiGatewayProvider(options: JevProviderOptions): JevP
           state.candidates,
           state.signals.source,
         );
+
+        return withAlternatePass(primary, state, async (remaining, primaryId) => {
+          const { questions: altQuestions } = buildAlternateQuestions(
+            [...remaining, ...state.candidates.filter(c => c.id === primaryId)],
+            primaryId,
+          );
+          const second = await evaluate({
+            model,
+            state: JSON.stringify({
+              ...summarizeState(state),
+              recommendedModel: primaryId,
+            }),
+            questions: altQuestions,
+            maxRetries: 1,
+            abortSignal: AbortSignal.timeout(options.timeoutMs),
+            providerOptions: {
+              gateway: { zeroDataRetention: true },
+            },
+          });
+          const alt = second.answers.alternate_model;
+          if (!alt || alt.type !== 'choice' || typeof alt.choice !== 'string') return null;
+          return alt.choice;
+        });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         if (message.startsWith('SCHEMA_REJECTED')) throw error;

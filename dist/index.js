@@ -36343,6 +36343,8 @@ var NavigatorDecisionSchema = external_exports.object({
   decision: external_exports.enum(DECISIONS),
   selected_model: external_exports.string().nullable(),
   provider: external_exports.string().nullable(),
+  alternate_model: external_exports.string().nullable().default(null),
+  ranked_models: external_exports.array(external_exports.string()).max(8).default([]),
   confidence: external_exports.number().min(0).max(1),
   reason_codes: external_exports.array(external_exports.enum(REASON_CODES)).min(1).max(16),
   explanation: external_exports.string().max(2e3).default(""),
@@ -36369,6 +36371,13 @@ var NavigatorDecisionSchema = external_exports.object({
       code: external_exports.ZodIssueCode.custom,
       message: "Non-SELECT decisions must not set selected_model",
       path: ["selected_model"]
+    });
+  }
+  if (value.alternate_model && value.selected_model && value.alternate_model === value.selected_model) {
+    ctx.addIssue({
+      code: external_exports.ZodIssueCode.custom,
+      message: "alternate_model must differ from selected_model",
+      path: ["alternate_model"]
     });
   }
 });
@@ -51238,6 +51247,30 @@ function buildSelectionQuestions(candidates) {
     }
   };
 }
+function buildAlternateQuestions(candidates, primaryId) {
+  const remaining = candidates.filter((c) => c.id !== primaryId);
+  const criteria = Object.fromEntries(
+    remaining.map((c) => [
+      c.id,
+      [
+        c.display_name ?? c.id,
+        `provider=${c.provider}`,
+        c.capabilities?.length ? `caps=${c.capabilities.join(",")}` : null,
+        c.cost_tier ? `cost=${c.cost_tier}` : null
+      ].filter(Boolean).join("; ")
+    ])
+  );
+  return {
+    remaining,
+    questions: {
+      alternate_model: {
+        type: "choice",
+        instructions: `Choose the best fallback model if ${primaryId} is unavailable. Choose a different listed candidate.`,
+        criteria
+      }
+    }
+  };
+}
 function summarizeState(state) {
   const base = {
     task: state.task,
@@ -51327,6 +51360,8 @@ function normalizeSelection(raw, candidates, source) {
     decision,
     selected_model,
     provider,
+    alternate_model: null,
+    ranked_models: selected_model ? [selected_model] : [],
     confidence: raw.confidence,
     reason_codes: pickReasonCodes(candidate, source, decision),
     explanation: raw.explanation ?? "",
@@ -51334,16 +51369,63 @@ function normalizeSelection(raw, candidates, source) {
   };
   return NavigatorDecisionSchema.parse(draft);
 }
+function attachAlternate(decision, alternateId, candidates) {
+  if (decision.decision !== "SELECT_MODEL" || !decision.selected_model) {
+    return NavigatorDecisionSchema.parse({
+      ...decision,
+      alternate_model: null,
+      ranked_models: decision.selected_model ? [decision.selected_model] : []
+    });
+  }
+  const allow = new Set(candidates.map((c) => c.id));
+  let alternate_model = alternateId;
+  if (!alternate_model || !allow.has(alternate_model) || alternate_model === decision.selected_model) {
+    alternate_model = null;
+  }
+  const ranked_models = [decision.selected_model, alternate_model].filter(
+    (id) => typeof id === "string" && id.length > 0
+  );
+  return NavigatorDecisionSchema.parse({
+    ...decision,
+    alternate_model,
+    ranked_models
+  });
+}
 function unavailableDecision(message) {
   return NavigatorDecisionSchema.parse({
     decision: "ABSTAIN",
     selected_model: null,
     provider: null,
+    alternate_model: null,
+    ranked_models: [],
     confidence: 0,
     reason_codes: ["JEV_UNAVAILABLE"],
     explanation: message,
     provisional: true
   });
+}
+
+// src/jev/alternate.ts
+async function withAlternatePass(decision, state, askAlternate) {
+  if (decision.decision !== "SELECT_MODEL" || !decision.selected_model) {
+    return attachAlternate(decision, null, state.candidates);
+  }
+  if (state.candidates.length < 2) {
+    return attachAlternate(decision, null, state.candidates);
+  }
+  const { remaining } = buildAlternateQuestions(
+    state.candidates,
+    decision.selected_model
+  );
+  if (remaining.length === 0) {
+    return attachAlternate(decision, null, state.candidates);
+  }
+  try {
+    const alternateId = await askAlternate(remaining, decision.selected_model);
+    return attachAlternate(decision, alternateId, state.candidates);
+  } catch {
+    return attachAlternate(decision, null, state.candidates);
+  }
 }
 
 // src/jev/vercel-ai-gateway.ts
@@ -51365,9 +51447,10 @@ function createVercelAiGatewayProvider(options) {
       }
       try {
         const gateway2 = createGateway({ apiKey: options.apiKey });
+        const model = gateway2.evaluationModel(options.model ?? "typesafe-ai/jev");
         const questions = buildSelectionQuestions(state.candidates);
         const result = await evaluate({
-          model: gateway2.evaluationModel(options.model ?? "typesafe-ai/jev"),
+          model,
           state: JSON.stringify(summarizeState(state)),
           questions,
           maxRetries: 1,
@@ -51383,7 +51466,7 @@ function createVercelAiGatewayProvider(options) {
         const abstain = result.answers.abstain;
         const review = result.answers.request_review;
         const typesafeConfidence = result.providerMetadata?.typesafe?.confidence?.selected_model;
-        return normalizeSelection(
+        const primary = normalizeSelection(
           {
             selectedModelId: selected.choice,
             confidence: typeof typesafeConfidence === "number" ? typesafeConfidence : confidenceFromAnswer(selected),
@@ -51395,6 +51478,28 @@ function createVercelAiGatewayProvider(options) {
           state.candidates,
           state.signals.source
         );
+        return withAlternatePass(primary, state, async (remaining, primaryId) => {
+          const { questions: altQuestions } = buildAlternateQuestions(
+            [...remaining, ...state.candidates.filter((c) => c.id === primaryId)],
+            primaryId
+          );
+          const second = await evaluate({
+            model,
+            state: JSON.stringify({
+              ...summarizeState(state),
+              recommendedModel: primaryId
+            }),
+            questions: altQuestions,
+            maxRetries: 1,
+            abortSignal: AbortSignal.timeout(options.timeoutMs),
+            providerOptions: {
+              gateway: { zeroDataRetention: true }
+            }
+          });
+          const alt = second.answers.alternate_model;
+          if (!alt || alt.type !== "choice" || typeof alt.choice !== "string") return null;
+          return alt.choice;
+        });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         if (message.startsWith("SCHEMA_REJECTED")) throw error;
@@ -51419,33 +51524,36 @@ function createTypesafeNativeProvider(options) {
         if (!model) {
           return unavailableDecision("jev_model is required for typesafe-native (pin a catalog model id)");
         }
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), options.timeoutMs);
-        const response = await fetchImpl(endpoint, {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            authorization: `Bearer ${options.apiKey}`
-          },
-          body: JSON.stringify({
-            model,
-            state: summarizeState(state),
-            questions: buildSelectionQuestions(state.candidates)
-          }),
-          signal: controller.signal
+        const post = async (payload) => {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), options.timeoutMs);
+          const response = await fetchImpl(endpoint, {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              authorization: `Bearer ${options.apiKey}`
+            },
+            body: JSON.stringify(payload),
+            signal: controller.signal
+          });
+          clearTimeout(timer);
+          if (!response.ok) {
+            throw new Error(
+              `typesafe-native HTTP ${response.status}: ${await response.text().catch(() => "")}`.slice(0, 500)
+            );
+          }
+          return await response.json();
+        };
+        const body = await post({
+          model,
+          state: summarizeState(state),
+          questions: buildSelectionQuestions(state.candidates)
         });
-        clearTimeout(timer);
-        if (!response.ok) {
-          return unavailableDecision(
-            `typesafe-native HTTP ${response.status}: ${await response.text().catch(() => "")}`.slice(0, 500)
-          );
-        }
-        const body = await response.json();
         const selected = body.answers?.selected_model;
         if (!selected || selected.type !== "choice" || typeof selected.choice !== "string") {
           throw new Error("SCHEMA_REJECTED: missing selected_model choice");
         }
-        return normalizeSelection(
+        const primary = normalizeSelection(
           {
             selectedModelId: selected.choice,
             confidence: body.confidence?.selected_model ?? selected.confidence ?? 0.5,
@@ -51457,9 +51565,26 @@ function createTypesafeNativeProvider(options) {
           state.candidates,
           state.signals.source
         );
+        return withAlternatePass(primary, state, async (remaining, primaryId) => {
+          const { questions } = buildAlternateQuestions(
+            [...remaining, ...state.candidates.filter((c) => c.id === primaryId)],
+            primaryId
+          );
+          const second = await post({
+            model,
+            state: { ...summarizeState(state), recommendedModel: primaryId },
+            questions
+          });
+          const alt = second.answers?.alternate_model;
+          if (!alt || alt.type !== "choice" || typeof alt.choice !== "string") return null;
+          return alt.choice;
+        });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         if (message.startsWith("SCHEMA_REJECTED")) throw error;
+        if (message.startsWith("typesafe-native HTTP")) {
+          return unavailableDecision(message);
+        }
         return unavailableDecision(`typesafe-native error: ${message}`);
       }
     }
@@ -51485,33 +51610,34 @@ function createCustomCompatibleProvider(options) {
         return unavailableDecision("jev_model is required for custom-compatible");
       }
       try {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), options.timeoutMs);
-        const response = await fetchImpl(options.endpoint, {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            authorization: `Bearer ${options.apiKey}`
-          },
-          body: JSON.stringify({
-            model: options.model,
-            state: summarizeState(state),
-            questions: buildSelectionQuestions(state.candidates)
-          }),
-          signal: controller.signal
+        const post = async (payload) => {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), options.timeoutMs);
+          const response = await fetchImpl(options.endpoint, {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              authorization: `Bearer ${options.apiKey}`
+            },
+            body: JSON.stringify(payload),
+            signal: controller.signal
+          });
+          clearTimeout(timer);
+          if (!response.ok) {
+            throw new Error(`custom-compatible HTTP ${response.status}`.slice(0, 200));
+          }
+          return await response.json();
+        };
+        const body = await post({
+          model: options.model,
+          state: summarizeState(state),
+          questions: buildSelectionQuestions(state.candidates)
         });
-        clearTimeout(timer);
-        if (!response.ok) {
-          return unavailableDecision(
-            `custom-compatible HTTP ${response.status}`.slice(0, 200)
-          );
-        }
-        const body = await response.json();
         const selected = body.answers?.selected_model;
         if (!selected || selected.type !== "choice" || typeof selected.choice !== "string") {
           throw new Error("SCHEMA_REJECTED: missing selected_model choice");
         }
-        return normalizeSelection(
+        const primary = normalizeSelection(
           {
             selectedModelId: selected.choice,
             confidence: body.confidence?.selected_model ?? selected.confidence ?? 0.5,
@@ -51523,9 +51649,26 @@ function createCustomCompatibleProvider(options) {
           state.candidates,
           state.signals.source
         );
+        return withAlternatePass(primary, state, async (remaining, primaryId) => {
+          const { questions } = buildAlternateQuestions(
+            [...remaining, ...state.candidates.filter((c) => c.id === primaryId)],
+            primaryId
+          );
+          const second = await post({
+            model: options.model,
+            state: { ...summarizeState(state), recommendedModel: primaryId },
+            questions
+          });
+          const alt = second.answers?.alternate_model;
+          if (!alt || alt.type !== "choice" || typeof alt.choice !== "string") return null;
+          return alt.choice;
+        });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         if (message.startsWith("SCHEMA_REJECTED")) throw error;
+        if (message.startsWith("custom-compatible HTTP")) {
+          return unavailableDecision(message);
+        }
         return unavailableDecision(`custom-compatible error: ${message}`);
       }
     }
@@ -51663,6 +51806,8 @@ function buildCommentMarkdown(decision) {
     "",
     `- **Decision:** \`${decision.decision}\``,
     `- **Selected model:** \`${decision.selected_model ?? "none"}\``,
+    `- **Alternate model:** \`${decision.alternate_model ?? "none"}\``,
+    `- **Ranked models:** ${(decision.ranked_models ?? []).map((m) => `\`${m}\``).join(", ") || "`none`"}`,
     `- **Model provider:** \`${decision.provider ?? "none"}\``,
     `- **Confidence:** ${decision.confidence.toFixed(3)}`,
     `- **Reason codes:** ${decision.reason_codes.map((c) => `\`${c}\``).join(", ")}`,
@@ -51731,6 +51876,8 @@ function buildCheckSummary(outcome) {
     `| --- | --- |`,
     `| Decision | \`${d.decision}\` |`,
     `| Selected model | \`${d.selected_model ?? "none"}\` |`,
+    `| Alternate model | \`${d.alternate_model ?? "none"}\` |`,
+    `| Ranked models | ${(d.ranked_models ?? []).map((m) => `\`${m}\``).join(", ") || "`none`"} |`,
     `| Model provider | \`${d.provider ?? "none"}\` |`,
     `| Confidence | ${d.confidence.toFixed(3)} |`,
     `| Policy | \`${outcome.status}\` |`,
@@ -51844,6 +51991,8 @@ async function runNavigator(params) {
 function writeDecisionOutputs(writer, decision, summary) {
   writer.setOutput("selected_model", decision.selected_model ?? "");
   writer.setOutput("provider", decision.provider ?? "");
+  writer.setOutput("alternate_model", decision.alternate_model ?? "");
+  writer.setOutput("ranked_models", JSON.stringify(decision.ranked_models ?? []));
   writer.setOutput("confidence", String(decision.confidence));
   writer.setOutput("reason_codes", JSON.stringify(decision.reason_codes));
   writer.setOutput("decision", decision.decision);

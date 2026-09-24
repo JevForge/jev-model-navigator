@@ -15,6 +15,8 @@ export function writeDecisionOutputs(
 ): void {
   writer.setOutput('selected_model', decision.selected_model ?? '');
   writer.setOutput('provider', decision.provider ?? '');
+  writer.setOutput('alternate_model', decision.alternate_model ?? '');
+  writer.setOutput('ranked_models', JSON.stringify(decision.ranked_models ?? []));
   writer.setOutput('confidence', String(decision.confidence));
   writer.setOutput('reason_codes', JSON.stringify(decision.reason_codes));
   writer.setOutput('decision', decision.decision);

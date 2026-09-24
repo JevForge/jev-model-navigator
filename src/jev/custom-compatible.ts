@@ -1,7 +1,20 @@
 import type { JevProvider, JevProviderOptions, JevEvaluationState } from './types.js';
-import { summarizeState, buildSelectionQuestions } from './questions.js';
+import {
+  summarizeState,
+  buildSelectionQuestions,
+  buildAlternateQuestions,
+} from './questions.js';
 import { normalizeSelection, unavailableDecision } from './normalize.js';
+import { withAlternatePass } from './alternate.js';
 import type { NavigatorDecision } from '../schemas/navigator.js';
+
+type EvaluateBody = {
+  answers?: Record<
+    string,
+    { type?: string; choice?: string; probability?: number; confidence?: number }
+  >;
+  confidence?: Record<string, number>;
+};
 
 /**
  * Custom HTTPS endpoint that speaks the same evaluate contract as TypeSafe native.
@@ -27,40 +40,37 @@ export function createCustomCompatibleProvider(options: JevProviderOptions): Jev
       }
 
       try {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), options.timeoutMs);
-        const response = await fetchImpl(options.endpoint, {
-          method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            authorization: `Bearer ${options.apiKey}`,
-          },
-          body: JSON.stringify({
-            model: options.model,
-            state: summarizeState(state),
-            questions: buildSelectionQuestions(state.candidates),
-          }),
-          signal: controller.signal,
-        });
-        clearTimeout(timer);
-
-        if (!response.ok) {
-          return unavailableDecision(
-            `custom-compatible HTTP ${response.status}`.slice(0, 200),
-          );
-        }
-
-        const body = (await response.json()) as {
-          answers?: Record<string, { type?: string; choice?: string; probability?: number; confidence?: number }>;
-          confidence?: Record<string, number>;
+        const post = async (payload: unknown): Promise<EvaluateBody> => {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), options.timeoutMs);
+          const response = await fetchImpl(options.endpoint!, {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              authorization: `Bearer ${options.apiKey}`,
+            },
+            body: JSON.stringify(payload),
+            signal: controller.signal,
+          });
+          clearTimeout(timer);
+          if (!response.ok) {
+            throw new Error(`custom-compatible HTTP ${response.status}`.slice(0, 200));
+          }
+          return (await response.json()) as EvaluateBody;
         };
+
+        const body = await post({
+          model: options.model,
+          state: summarizeState(state),
+          questions: buildSelectionQuestions(state.candidates),
+        });
 
         const selected = body.answers?.selected_model;
         if (!selected || selected.type !== 'choice' || typeof selected.choice !== 'string') {
           throw new Error('SCHEMA_REJECTED: missing selected_model choice');
         }
 
-        return normalizeSelection(
+        const primary = normalizeSelection(
           {
             selectedModelId: selected.choice,
             confidence:
@@ -79,9 +89,27 @@ export function createCustomCompatibleProvider(options: JevProviderOptions): Jev
           state.candidates,
           state.signals.source,
         );
+
+        return withAlternatePass(primary, state, async (remaining, primaryId) => {
+          const { questions } = buildAlternateQuestions(
+            [...remaining, ...state.candidates.filter(c => c.id === primaryId)],
+            primaryId,
+          );
+          const second = await post({
+            model: options.model,
+            state: { ...summarizeState(state), recommendedModel: primaryId },
+            questions,
+          });
+          const alt = second.answers?.alternate_model;
+          if (!alt || alt.type !== 'choice' || typeof alt.choice !== 'string') return null;
+          return alt.choice;
+        });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         if (message.startsWith('SCHEMA_REJECTED')) throw error;
+        if (message.startsWith('custom-compatible HTTP')) {
+          return unavailableDecision(message);
+        }
         return unavailableDecision(`custom-compatible error: ${message}`);
       }
     },

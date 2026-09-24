@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0
+
+- Ask Jev for an `alternate_model` fallback (different allowlisted candidate) after primary selection.
+- Emit `ranked_models` JSON output (`[selected, alternate]`).
+- Surface alternate/ranked models in comments and Check Run summaries.
+
 ## 0.3.0
 
 - Optional managed Issue/PR labels: `jev:decision:*`, `jev:model:*`, `jev:review`.
