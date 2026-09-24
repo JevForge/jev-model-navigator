@@ -1,6 +1,6 @@
 {
   "name": "jev-model-navigator",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "GitHub Action that routes Issues and PRs to the best AI model using typed TypeSafe Jev decisions.",
   "private": true,
   "type": "module",
