@@ -27,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - id: nav
-        uses: JevForge/jev-model-navigator@v0.1.0
+        uses: JevForge/jev-model-navigator@v0.1.1
         env:
           AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
         with:
@@ -38,7 +38,9 @@ jobs:
       - run: echo "${{ steps.nav.outputs.selected_model }} (${{ steps.nav.outputs.confidence }})"
 ```
 
-Pin `@v0.1.0` for reproducibility, or `@v0` for the floating major.
+Pin `@v0.1.1` for reproducibility, or `@v0` for the floating major.
+
+Marketplace: [JEV Model Navigator](https://github.com/marketplace/actions/jev-model-navigator)
 
 ## How it works
 
